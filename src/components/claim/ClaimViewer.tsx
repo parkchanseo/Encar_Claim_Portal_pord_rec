@@ -860,6 +860,7 @@ export default function ClaimViewer() {
                             handleEditChange("region", e.target.value)
                           }
                           className={inputClass}
+                          placeholder="예: 서울"
                         />
                       </div>
                       <div className="col-span-2 sm:col-span-1">
@@ -871,6 +872,7 @@ export default function ClaimViewer() {
                             handleEditChange("center", e.target.value)
                           }
                           className={inputClass}
+                          placeholder="예: 오토플렉스"
                         />
                       </div>
                       <div className="col-span-2 sm:col-span-1">
@@ -882,6 +884,7 @@ export default function ClaimViewer() {
                             handleEditChange("manager_name", e.target.value)
                           }
                           className={inputClass}
+                          placeholder="담당 CAM"
                         />
                       </div>
                       <div className="col-span-2 sm:col-span-1">
@@ -893,12 +896,13 @@ export default function ClaimViewer() {
                             handleEditChange("claim_part", e.target.value)
                           }
                           className={inputClass}
+                          placeholder="예: 운전석 휀다"
                         />
                       </div>
                     </div>
 
                     <div>
-                      <label className={labelClass}>재발방지책</label>
+                      <label className={labelClass}>재발 방지책</label>
                       <textarea
                         rows={2}
                         value={editData.preventive_measure || ""}
