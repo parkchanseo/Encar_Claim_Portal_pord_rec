@@ -11,7 +11,13 @@ import {
   ChevronUp,
   Clock,
   ListTree,
+  ChevronRight,
+  Filter,
+  CheckCircle,
+  AlertTriangle,
 } from "lucide-react";
+// 💡 파이프라인 임포트 (본진 환경에 맞게 경로 확인 필수)
+import { supabase } from "../../lib/supabase";
 import {
   AreaChart,
   Area,
@@ -22,10 +28,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-// 💡 파이프라인 임포트 (경로 확인 필수)
-import { supabase } from "../../lib/supabase";
 
-// 💡 TypeScript 타입 정의 (DB 구조와 완벽 동기화)
 interface ClaimReport {
   id: string;
   category: string;
@@ -38,13 +41,21 @@ interface ClaimReport {
   manager_name: string;
 }
 
-export default function ClaimDashboard() {
-  const [timeRange, setTimeRange] = useState("2026년");
+// 💡 [버그 픽스] user와 navigateToMenu 뒤에 물음표(?)를 붙여서 '없어도 에러 띄우지 마'라고 설정했습니다.
+export default function ClaimDashboard({
+  user,
+  navigateToMenu,
+}: {
+  user?: any;
+  navigateToMenu?: any;
+}) {
+  const [selectedMonth, setSelectedMonth] = useState("전체");
+  const [top3SortBy, setTop3SortBy] = useState<"count" | "amount">("count");
   const [expandedRegion, setExpandedRegion] = useState<string | null>(null);
+
   const [rawClaims, setRawClaims] = useState<ClaimReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  // 💡 DB에서 클레임 데이터 실시간 호출
   useEffect(() => {
     const fetchDashboardData = async () => {
       setIsLoading(true);
@@ -67,22 +78,14 @@ export default function ClaimDashboard() {
     setExpandedRegion(expandedRegion === regionId ? null : regionId);
   };
 
-  const getProgressColor = (rate: number) => {
-    if (rate < 50) return "bg-red-500";
-    if (rate < 80) return "bg-orange-400";
-    return "bg-emerald-500";
-  };
-
-  // 💡 프론트엔드 데이터 동적 가공(Aggregation) 로직
   const dashboardData = useMemo(() => {
     if (!rawClaims.length) return null;
 
     const currentYear = new Date().getFullYear();
-    const currentMonth = new Date().getMonth() + 1;
-
-    let currentMonthClaims = 0;
-    let currentMonthAmount = 0;
-    let actionRequired = 0;
+    const targetMonthNum =
+      selectedMonth === "전체"
+        ? null
+        : parseInt(selectedMonth.replace("월", ""));
 
     const monthlyMap = Array.from({ length: 12 }, (_, i) => ({
       month: `${i + 1}월`,
@@ -90,53 +93,59 @@ export default function ClaimDashboard() {
       amount: 0,
     }));
 
+    rawClaims.forEach((c) => {
+      const claimDate = new Date(c.occurrence_date);
+      if (claimDate.getFullYear() === currentYear) {
+        monthlyMap[claimDate.getMonth()].claims += 1;
+        monthlyMap[claimDate.getMonth()].amount +=
+          Number(c.compensation_amount) || 0;
+      }
+    });
+
+    const filteredClaims = rawClaims.filter((c) => {
+      const d = new Date(c.occurrence_date);
+      if (d.getFullYear() !== currentYear) return false;
+      if (targetMonthNum && d.getMonth() + 1 !== targetMonthNum) return false;
+      return true;
+    });
+
+    let currentClaimsCount = 0;
+    let currentTotalAmount = 0;
+    let actionRequired = 0;
+
+    let totalRequiredMods = 0;
+    let totalCompletedMods = 0;
+
     const centerMap: Record<string, any> = {};
     const regionMap: Record<string, any> = {};
 
-    rawClaims.forEach((c) => {
-      const claimDate = new Date(c.occurrence_date);
-      const claimYear = claimDate.getFullYear();
-      const claimMonth = claimDate.getMonth() + 1;
+    filteredClaims.forEach((c) => {
       const amount = Number(c.compensation_amount) || 0;
+      currentClaimsCount++;
+      currentTotalAmount += amount;
 
-      // 1. 당월 지표 계산
-      if (claimYear === currentYear && claimMonth === currentMonth) {
-        currentMonthClaims++;
-        currentMonthAmount += amount;
+      const isRefundAd = c.category === "검수리포트" && c.is_refunded;
+
+      if (isRefundAd) {
+        totalRequiredMods++;
+        if (c.claim_status === "광고 수정 완료") totalCompletedMods++;
+        else actionRequired++;
       }
 
-      // Action Required (환불이 발생한 검수리포트인데, 광고 수정이 완료되지 않은 건)
-      if (
-        c.category === "검수리포트" &&
-        c.is_refunded &&
-        c.claim_status !== "광고 수정 완료"
-      ) {
-        actionRequired++;
-      }
-
-      // 2. 월별 차트 데이터
-      if (claimYear === currentYear) {
-        monthlyMap[claimMonth - 1].claims += 1;
-        monthlyMap[claimMonth - 1].amount += amount;
-      }
-
-      // 3. Top 3 센터 가공
       const region = c.region || "미분류";
       const center = c.center || "미상";
       const centerKey = `${region}|${center}`;
 
       if (!centerMap[centerKey]) {
-        centerMap[centerKey] = { region, center, count: 0, total_amount: 0 };
+        centerMap[centerKey] = { region, center, count: 0, amount: 0 };
       }
       centerMap[centerKey].count += 1;
-      centerMap[centerKey].total_amount += amount;
+      centerMap[centerKey].amount += amount;
 
-      // 4. 권역별 드릴다운 데이터 가공
       if (!regionMap[region]) {
         regionMap[region] = {
           id: region,
           region,
-          manager: c.manager_name || "-",
           claims: 0,
           amount: 0,
           required_ad_mods: 0,
@@ -144,12 +153,10 @@ export default function ClaimDashboard() {
           branchMap: {},
         };
       }
-
       regionMap[region].claims += 1;
       regionMap[region].amount += amount;
 
-      const isTarget = c.category === "검수리포트" && c.is_refunded;
-      if (isTarget) {
+      if (isRefundAd) {
         regionMap[region].required_ad_mods += 1;
         if (c.claim_status === "광고 수정 완료")
           regionMap[region].completed_ad_mods += 1;
@@ -167,51 +174,62 @@ export default function ClaimDashboard() {
       regionMap[region].branchMap[center].claims += 1;
       regionMap[region].branchMap[center].amount += amount;
 
-      if (isTarget) {
+      if (isRefundAd) {
         regionMap[region].branchMap[center].required_ad_mods += 1;
         if (c.claim_status === "광고 수정 완료")
           regionMap[region].branchMap[center].completed_ad_mods += 1;
       }
     });
 
-    const monthlyData = monthlyMap.slice(0, currentMonth);
+    const avgCompletionRate = totalRequiredMods
+      ? Math.round((totalCompletedMods / totalRequiredMods) * 100)
+      : 100;
 
     const topCenters = Object.values(centerMap)
-      .sort((a: any, b: any) => b.count - a.count)
+      .sort((a: any, b: any) => b[top3SortBy] - a[top3SortBy])
       .slice(0, 3)
       .map((item, index) => ({ ...(item as any), rank: index + 1 }));
 
-    const regionalMetrics = Object.values(regionMap).map((rg: any) => {
-      const branches = Object.values(rg.branchMap).map((br: any) => ({
-        ...br,
-        completionRate: br.required_ad_mods
-          ? Math.round((br.completed_ad_mods / br.required_ad_mods) * 100)
-          : 100,
-      }));
-      return {
-        ...rg,
-        completionRate: rg.required_ad_mods
-          ? Math.round((rg.completed_ad_mods / rg.required_ad_mods) * 100)
-          : 100,
-        leadTime: 2.0, // 데모용
-        branches,
-      };
-    });
+    const regionalMetrics = Object.values(regionMap)
+      .map((rg: any) => {
+        const branches = Object.values(rg.branchMap)
+          .map((br: any) => ({
+            ...br,
+            completionRate: br.required_ad_mods
+              ? Math.round((br.completed_ad_mods / br.required_ad_mods) * 100)
+              : 100,
+          }))
+          .sort((a, b) => b.claims - a.claims);
+
+        return {
+          ...rg,
+          completionRate: rg.required_ad_mods
+            ? Math.round((rg.completed_ad_mods / rg.required_ad_mods) * 100)
+            : 100,
+          branches,
+        };
+      })
+      .sort((a, b) => b.claims - a.claims);
+
+    const currentRealMonth = new Date().getMonth() + 1;
+    const monthlyData = monthlyMap.slice(0, currentRealMonth);
 
     return {
-      currentMonthClaims,
-      currentMonthAmount,
+      currentClaimsCount,
+      currentTotalAmount,
       actionRequired,
+      avgCompletionRate,
       monthlyData,
       topCenters,
       regionalMetrics,
     };
-  }, [rawClaims]);
+  }, [rawClaims, selectedMonth, top3SortBy]);
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <p className="text-slate-400 font-bold animate-pulse text-lg">
+      <div className="flex flex-col items-center justify-center h-full animate-in fade-in">
+        <AlertCircle className="animate-spin text-blue-500 mb-4" size={40} />
+        <p className="text-sm font-bold text-slate-500">
           대시보드 데이터를 실시간으로 분석 중입니다...
         </p>
       </div>
@@ -220,12 +238,12 @@ export default function ClaimDashboard() {
 
   if (!dashboardData) {
     return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <AlertCircle size={48} className="text-slate-300 mb-4" />
-        <h2 className="text-xl font-bold text-slate-600 mb-2">
+      <div className="flex flex-col items-center justify-center h-full animate-in fade-in">
+        <BarChart3 size={48} className="text-slate-300 mb-4" />
+        <h2 className="text-xl font-black text-slate-600 mb-2">
           등록된 클레임 데이터가 없습니다.
         </h2>
-        <p className="text-slate-400">
+        <p className="text-sm font-bold text-slate-400">
           새 클레임을 등록하시면 대시보드가 자동으로 활성화됩니다.
         </p>
       </div>
@@ -233,125 +251,145 @@ export default function ClaimDashboard() {
   }
 
   const {
-    currentMonthClaims,
-    currentMonthAmount,
+    currentClaimsCount,
+    currentTotalAmount,
     actionRequired,
+    avgCompletionRate,
     monthlyData,
     topCenters,
     regionalMetrics,
   } = dashboardData;
 
   return (
-    <div className="space-y-6">
-      {/* 상단 헤더 */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+    <div className="space-y-8 animate-in fade-in duration-500 relative pb-20">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-black text-slate-800">
-            클레임 통계 대시보드
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">
-            데이터 기반 클레임 원인 분석 및 현장 타겟팅 (실시간 연동)
+          <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+            <BarChart3 size={24} className="text-blue-600" /> 클레임 종합 상황판
+          </h2>
+          <p className="text-[11px] font-bold text-slate-500 mt-1 ml-8">
+            데이터 기반 클레임 타겟팅 및 성과 지표
           </p>
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="flex items-center gap-2 bg-white px-2 py-1.5 rounded-xl shadow-sm border border-slate-200">
+          <Filter size={14} className="text-slate-400 ml-2" />
           <select
-            value={timeRange}
-            onChange={(e) => setTimeRange(e.target.value)}
-            className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-700 shadow-sm outline-none focus:border-blue-400"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="px-2 py-1 bg-transparent text-sm font-black text-slate-700 outline-none cursor-pointer"
           >
-            <option value="2026년">2026년 전체 누적</option>
+            <option value="전체">2026년 전체 누적</option>
+            {Array.from({ length: 12 }, (_, i) => (
+              <option key={i} value={`${i + 1}월`}>
+                {i + 1}월 집중 분석
+              </option>
+            ))}
           </select>
         </div>
       </div>
 
-      {/* 1단계: 거시적 지표 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+        <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 flex flex-col justify-between group hover:border-blue-200 hover:shadow-md transition-all">
           <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-              <BarChart3 size={24} />
+            <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl group-hover:scale-110 transition-transform">
+              <BarChart3 size={20} />
             </div>
+            <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
+              발생 건수
+            </span>
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-500 mb-1">
-              당월 누적 발생 건수
+            <h3 className="text-2xl font-black text-slate-800 mb-1">
+              {currentClaimsCount}
+              <span className="text-sm font-bold text-slate-500 ml-1">건</span>
+            </h3>
+            <p className="text-[11px] font-bold text-slate-400">
+              선택 기간 기준
             </p>
-            <div className="flex items-end gap-2">
-              <h3 className="text-3xl font-black text-slate-800">
-                {currentMonthClaims}
-                <span className="text-lg font-medium text-slate-500 ml-1">
-                  건
-                </span>
-              </h3>
-            </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col justify-between">
+        <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 flex flex-col justify-between group hover:border-slate-300 hover:shadow-md transition-all">
           <div className="flex justify-between items-start mb-4">
-            <div className="p-3 bg-red-50 text-red-600 rounded-xl">
-              <Activity size={24} />
+            <div className="p-2.5 bg-slate-100 text-slate-700 rounded-xl group-hover:scale-110 transition-transform">
+              <Activity size={20} />
             </div>
+            <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
+              누적 비용
+            </span>
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-500 mb-1">
-              당월 누적 보상 금액
+            <h3 className="text-2xl font-black text-slate-800 mb-1">
+              {currentTotalAmount.toLocaleString()}
+              <span className="text-sm font-bold text-slate-500 ml-1">원</span>
+            </h3>
+            <p className="text-[11px] font-bold text-slate-400">
+              재무적 손실 규모
             </p>
-            <div className="flex items-end gap-2">
-              <h3 className="text-3xl font-black text-red-600">
-                {currentMonthAmount.toLocaleString()}
-                <span className="text-lg font-medium text-slate-500 ml-1">
-                  원
-                </span>
-              </h3>
-            </div>
           </div>
         </div>
 
-        <div className="bg-slate-800 p-6 rounded-2xl shadow-sm flex flex-col justify-between text-white relative overflow-hidden">
-          <div className="absolute -right-6 -top-6 text-slate-700 opacity-50">
-            <AlertCircle size={100} />
+        <div className="bg-white p-5 rounded-3xl shadow-sm border border-slate-200 flex flex-col justify-between group hover:border-emerald-200 hover:shadow-md transition-all">
+          <div className="flex justify-between items-start mb-4">
+            <div className="p-2.5 bg-emerald-50 text-emerald-600 rounded-xl group-hover:scale-110 transition-transform">
+              <CheckCircle size={20} />
+            </div>
+            <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2 py-1 rounded-lg">
+              개선 지표
+            </span>
+          </div>
+          <div>
+            <h3 className="text-2xl font-black text-slate-800 mb-1">
+              {avgCompletionRate}
+              <span className="text-sm font-bold text-slate-500 ml-1">%</span>
+            </h3>
+            <p className="text-[11px] font-bold text-slate-400">
+              광고 수정 평균 달성률
+            </p>
+          </div>
+        </div>
+
+        {/* 💡 [버그 픽스] navigateToMenu가 존재할 때만 함수를 실행하도록 방어막을 쳤습니다. */}
+        <div
+          onClick={() => navigateToMenu && navigateToMenu("claim-list")}
+          className="bg-red-50 p-5 rounded-3xl shadow-sm border border-red-100 flex flex-col justify-between cursor-pointer hover:bg-red-500 hover:shadow-lg hover:-translate-y-1 transition-all group relative overflow-hidden"
+        >
+          <div className="absolute -right-4 -bottom-4 text-red-500/10 group-hover:text-black/10 transition-colors">
+            <AlertTriangle size={120} />
           </div>
           <div className="flex justify-between items-start mb-4 relative z-10">
-            <div className="p-3 bg-slate-700 text-slate-300 rounded-xl">
-              <Wrench size={24} />
+            <div className="p-2.5 bg-red-100 text-red-600 rounded-xl group-hover:bg-white group-hover:text-red-600 transition-colors">
+              <Wrench size={20} />
             </div>
-            <span className="text-sm font-bold text-red-400 bg-red-400/20 px-2.5 py-1 rounded-full animate-pulse">
-              Action Required
+            <span className="text-[10px] font-black text-red-600 bg-red-100 px-2 py-1 rounded-lg group-hover:bg-black/20 group-hover:text-white flex items-center gap-1 animate-pulse">
+              Action Required <ChevronRight size={10} />
             </span>
           </div>
           <div className="relative z-10">
-            <p className="text-sm font-bold text-slate-400 mb-1">
-              광고 수정 미완료 대기 건
-            </p>
-            <div className="flex items-end gap-2">
-              <h3 className="text-3xl font-black text-white">
-                {actionRequired}
-                <span className="text-lg font-medium text-slate-400 ml-1">
-                  건
-                </span>
-              </h3>
-            </div>
-            <p className="text-xs text-slate-400 mt-2">
-              뷰어에서 즉시 처리 요망
+            <h3 className="text-2xl font-black text-red-600 group-hover:text-white mb-1">
+              {actionRequired}
+              <span className="text-sm font-bold opacity-70 ml-1">건</span>
+            </h3>
+            <p className="text-[11px] font-bold text-red-500 group-hover:text-red-100">
+              광고 수정 미완료 (클릭하여 처리)
             </p>
           </div>
         </div>
       </div>
 
-      {/* 2단계: 차트 & Top3 */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 lg:col-span-2 flex flex-col">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-slate-200 p-6 flex flex-col">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-base font-black text-slate-800 flex items-center gap-2">
-              <TrendingDown className="text-emerald-500" size={20} />
-              월별 클레임 발생 건수 추이
-            </h2>
-            <span className="text-xs font-bold text-slate-400">
-              2026년 기준
+            <h3 className="font-black text-slate-800 flex items-center gap-2">
+              <TrendingDown size={18} className="text-blue-500" /> 월별 클레임
+              발생 현황
+            </h3>
+            <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded-md">
+              2026 누적 추이
             </span>
           </div>
-          <div className="flex-1 w-full h-72">
+          <div className="flex-1 w-full min-h-[250px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
                 data={monthlyData}
@@ -366,29 +404,30 @@ export default function ClaimDashboard() {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
-                  stroke="#e2e8f0"
+                  stroke="#f1f5f9"
                 />
                 <XAxis
                   dataKey="month"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 12, fill: "#64748b" }}
+                  tick={{ fontSize: 11, fill: "#94a3b8", fontWeight: 700 }}
                   dy={10}
                 />
                 <YAxis
                   yAxisId="left"
                   axisLine={false}
                   tickLine={false}
-                  tick={{ fontSize: 12, fill: "#64748b" }}
+                  tick={{ fontSize: 11, fill: "#94a3b8", fontWeight: 700 }}
                 />
                 <Tooltip
                   contentStyle={{
-                    borderRadius: "12px",
+                    borderRadius: "16px",
                     border: "none",
-                    boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)",
+                    boxShadow: "0 10px 15px -3px rgb(0 0 0 / 0.1)",
+                    fontWeight: 700,
+                    fontSize: "12px",
                   }}
                 />
-                <Legend verticalAlign="top" height={36} iconType="circle" />
                 <Area
                   yAxisId="left"
                   type="monotone"
@@ -396,206 +435,243 @@ export default function ClaimDashboard() {
                   dataKey="claims"
                   stroke="#3b82f6"
                   strokeWidth={3}
-                  fillOpacity={1}
                   fill="url(#colorClaims)"
-                  activeDot={{ r: 6 }}
+                  activeDot={{
+                    r: 6,
+                    fill: "#2563eb",
+                    stroke: "#fff",
+                    strokeWidth: 2,
+                  }}
                 />
               </AreaChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-base font-black text-slate-800 flex items-center gap-2">
-              <AlertCircle className="text-red-500" size={20} />
-              요주의 권역 / 지점 Top 3
-            </h2>
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 flex flex-col overflow-hidden h-[340px]">
+          <div className="flex border-b border-slate-100 bg-slate-50">
+            <button
+              onClick={() => setTop3SortBy("count")}
+              className={`flex-1 py-3 text-[11px] font-black transition-all ${
+                top3SortBy === "count"
+                  ? "bg-white text-blue-600 border-b-2 border-blue-500 shadow-sm"
+                  : "text-slate-500 hover:bg-slate-100"
+              }`}
+            >
+              📊 건수 집중 관리
+            </button>
+            <button
+              onClick={() => setTop3SortBy("amount")}
+              className={`flex-1 py-3 text-[11px] font-black transition-all ${
+                top3SortBy === "amount"
+                  ? "bg-white text-red-600 border-b-2 border-red-500 shadow-sm"
+                  : "text-slate-500 hover:bg-slate-100"
+              }`}
+            >
+              💰 비용 집중 관리
+            </button>
           </div>
-          <div className="flex-1 flex flex-col justify-start gap-4">
+
+          <div className="p-5 flex-1 flex flex-col gap-3 overflow-y-auto custom-scrollbar">
             {topCenters.length === 0 ? (
-              <div className="text-center text-slate-400 py-10 text-sm">
-                데이터가 충분하지 않습니다.
-              </div>
+              <p className="text-xs font-bold text-slate-400 text-center py-10">
+                데이터가 없습니다.
+              </p>
             ) : (
-              topCenters.map((item: any, index: number) => (
-                <div
-                  key={index}
-                  className="relative bg-slate-50 border border-slate-100 rounded-xl p-4 overflow-hidden group hover:border-red-200 hover:bg-red-50/30 transition-all"
-                >
+              topCenters.map((item: any, index: number) => {
+                const isAmountMode = top3SortBy === "amount";
+                return (
                   <div
-                    className="absolute left-0 top-0 bottom-0 bg-red-100/50 z-0 transition-all"
-                    style={{
-                      width: `${(item.count / topCenters[0].count) * 100}%`,
-                    }}
-                  ></div>
-                  <div className="relative z-10 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
+                    key={index}
+                    className="relative bg-slate-50 border border-slate-100 rounded-2xl p-4 overflow-hidden group hover:border-slate-300 transition-colors"
+                  >
+                    <div className="relative z-10 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-8 h-8 rounded-xl flex items-center justify-center text-xs font-black shadow-sm ${
+                            item.rank === 1
+                              ? isAmountMode
+                                ? "bg-red-500 text-white"
+                                : "bg-blue-600 text-white"
+                              : item.rank === 2
+                              ? isAmountMode
+                                ? "bg-red-400 text-white"
+                                : "bg-blue-500 text-white"
+                              : "bg-slate-200 text-slate-600"
+                          }`}
+                        >
+                          {item.rank}
+                        </div>
+                        <div>
+                          <h4 className="text-sm font-black text-slate-800">
+                            {item.region} | {item.center}
+                          </h4>
+                          <p className="text-[10px] font-bold text-slate-400 mt-0.5">
+                            {isAmountMode
+                              ? `${item.count}건 발생`
+                              : `누적 ${item.amount.toLocaleString()}원`}
+                          </p>
+                        </div>
+                      </div>
                       <div
-                        className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black ${
-                          item.rank === 1
-                            ? "bg-red-500 text-white shadow-md"
-                            : item.rank === 2
-                            ? "bg-orange-400 text-white"
-                            : "bg-slate-300 text-slate-700"
+                        className={`text-right font-black ${
+                          isAmountMode ? "text-red-600" : "text-slate-800"
                         }`}
                       >
-                        {item.rank}
-                      </div>
-                      <div>
-                        <h4 className="text-sm font-black text-slate-800">
-                          {item.region} / {item.center}
-                        </h4>
-                        <p className="text-xs font-bold text-slate-500 mt-0.5">
-                          보상: {item.total_amount.toLocaleString()}원
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-lg font-black text-slate-800">
-                        {item.count}
-                        <span className="text-xs text-slate-500 ml-0.5">
-                          건
+                        <span className="text-lg">
+                          {isAmountMode
+                            ? (item.amount / 10000).toLocaleString()
+                            : item.count}
+                        </span>
+                        <span className="text-[10px] ml-0.5 text-slate-400">
+                          {isAmountMode ? "만 원" : "건"}
                         </span>
                       </div>
                     </div>
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         </div>
       </div>
 
-      {/* 3단계: 권역/지점별 세부 지표 */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
-          <h2 className="text-base font-black text-slate-800 flex items-center gap-2">
-            <ListTree className="text-blue-600" size={20} />
-            권역별 실시간 성과 지표
-          </h2>
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col w-full">
+        <div className="p-4 border-b bg-slate-50 font-black text-sm text-slate-700 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <ListTree size={16} className="text-blue-600" /> 지점별 타겟팅 및
+            이행률
+          </div>
+          <span className="text-[10px] text-slate-400 font-bold">
+            행을 클릭하여 세부 지점 확인
+          </span>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm text-slate-600">
-            <thead className="bg-slate-50 border-b border-slate-200 text-slate-700 font-bold">
+        <div className="overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left whitespace-nowrap min-w-[600px]">
+            <thead className="bg-white text-[11px] font-black text-slate-400 border-b shadow-sm">
               <tr>
-                <th className="px-6 py-4 whitespace-nowrap">권역</th>
-                <th className="px-6 py-4 whitespace-nowrap text-center">
-                  클레임 발생 (건)
-                </th>
-                <th className="px-6 py-4 whitespace-nowrap text-right">
-                  누적 보상금액
-                </th>
-                <th className="px-6 py-4 whitespace-nowrap w-1/4">
-                  광고 수정 달성률
-                </th>
+                <th className="px-6 py-4">권역</th>
+                <th className="px-6 py-4 text-center">클레임 발생</th>
+                <th className="px-6 py-4 text-right">보상 총액</th>
+                <th className="px-6 py-4 w-1/3">광고 수정 달성률</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
-              {regionalMetrics.map((region: any) => (
-                <React.Fragment key={region.id}>
-                  <tr
-                    onClick={() => toggleRegion(region.id)}
-                    className={`hover:bg-blue-50/50 cursor-pointer transition-colors ${
-                      expandedRegion === region.id ? "bg-blue-50/30" : ""
-                    }`}
+            <tbody className="text-sm font-medium text-slate-600 divide-y divide-slate-100">
+              {regionalMetrics.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={4}
+                    className="text-center py-10 font-bold text-slate-400 text-xs"
                   >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-2">
+                    선택한 기간에 데이터가 없습니다.
+                  </td>
+                </tr>
+              ) : (
+                regionalMetrics.map((region: any) => (
+                  <React.Fragment key={region.id}>
+                    <tr
+                      onClick={() => toggleRegion(region.id)}
+                      className={`hover:bg-slate-50 cursor-pointer transition-colors ${
+                        expandedRegion === region.id ? "bg-slate-50" : ""
+                      }`}
+                    >
+                      <td className="px-6 py-4 font-black text-slate-800 flex items-center gap-2">
                         {expandedRegion === region.id ? (
-                          <ChevronUp size={16} className="text-blue-600" />
+                          <ChevronUp size={14} className="text-blue-500" />
                         ) : (
-                          <ChevronDown size={16} className="text-slate-400" />
+                          <ChevronDown size={14} className="text-slate-300" />
                         )}
-                        <span className="font-black text-slate-800 text-[15px]">
-                          {region.region}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 text-center font-bold text-slate-700">
-                      {region.claims}
-                    </td>
-                    <td className="px-6 py-4 text-right font-bold text-slate-700">
-                      {region.amount.toLocaleString()}원
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-full bg-slate-100 rounded-full h-2.5">
-                          <div
-                            className={`h-2.5 rounded-full ${getProgressColor(
-                              region.completionRate
-                            )}`}
-                            style={{ width: `${region.completionRate}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-xs font-black text-slate-700 w-8">
-                          {region.completionRate}%
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                  {expandedRegion === region.id && (
-                    <tr>
-                      <td colSpan={4} className="bg-slate-50 p-0">
-                        <div className="px-8 py-4 bg-slate-50/80 border-b border-slate-200 shadow-inner">
-                          <table className="w-full text-xs text-slate-600">
-                            <thead className="text-slate-500 border-b border-slate-200">
-                              <tr>
-                                <th className="pb-2 font-bold pl-4">지점명</th>
-                                <th className="pb-2 font-bold text-center">
-                                  건수
-                                </th>
-                                <th className="pb-2 font-bold text-right">
-                                  보상금액
-                                </th>
-                                <th className="pb-2 font-bold w-1/3">달성률</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-slate-100">
-                              {region.branches.map(
-                                (branch: any, idx: number) => (
-                                  <tr
-                                    key={idx}
-                                    className="hover:bg-white transition-colors"
-                                  >
-                                    <td className="py-3 pl-4 font-bold text-slate-700 flex items-center gap-2">
-                                      <div className="w-1 h-1 rounded-full bg-slate-400"></div>
-                                      {branch.name}
-                                    </td>
-                                    <td className="py-3 text-center">
-                                      {branch.claims}
-                                    </td>
-                                    <td className="py-3 text-right">
-                                      {branch.amount.toLocaleString()}원
-                                    </td>
-                                    <td className="py-3">
-                                      <div className="flex items-center gap-2 pr-4">
-                                        <div className="w-full bg-slate-200 rounded-full h-1.5">
-                                          <div
-                                            className={`h-1.5 rounded-full ${getProgressColor(
-                                              branch.completionRate
-                                            )}`}
-                                            style={{
-                                              width: `${branch.completionRate}%`,
-                                            }}
-                                          ></div>
-                                        </div>
-                                        <span className="text-[10px] font-bold text-slate-500 w-6">
-                                          {branch.completionRate}%
-                                        </span>
-                                      </div>
-                                    </td>
-                                  </tr>
-                                )
-                              )}
-                            </tbody>
-                          </table>
+                        {region.region}권역
+                      </td>
+                      <td className="px-6 py-4 text-center font-bold">
+                        {region.claims}건
+                      </td>
+                      <td className="px-6 py-4 text-right font-bold text-slate-700">
+                        {region.amount.toLocaleString()}원
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-full bg-slate-100 rounded-full h-2">
+                            <div
+                              className={`h-2 rounded-full transition-all duration-1000 ${
+                                region.completionRate < 50
+                                  ? "bg-red-400"
+                                  : region.completionRate < 80
+                                  ? "bg-amber-400"
+                                  : "bg-emerald-500"
+                              }`}
+                              style={{ width: `${region.completionRate}%` }}
+                            ></div>
+                          </div>
+                          <span className="text-[10px] font-black text-slate-500 w-8">
+                            {region.completionRate}%
+                          </span>
                         </div>
                       </td>
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
+                    {expandedRegion === region.id && (
+                      <tr>
+                        <td colSpan={4} className="p-0 border-none">
+                          <div className="px-8 py-4 bg-slate-50/80 border-b border-slate-100 shadow-inner">
+                            <table className="w-full text-xs text-slate-600">
+                              <thead className="text-[10px] text-slate-400 font-bold border-b border-slate-200">
+                                <tr>
+                                  <th className="pb-2 pl-4">지점명</th>
+                                  <th className="pb-2 text-center">건수</th>
+                                  <th className="pb-2 text-right">보상액</th>
+                                  <th className="pb-2 w-1/3">달성률</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-slate-100/50">
+                                {region.branches.map(
+                                  (branch: any, idx: number) => (
+                                    <tr
+                                      key={idx}
+                                      className="hover:bg-white transition-colors"
+                                    >
+                                      <td className="py-2.5 pl-4 font-bold text-slate-700 flex items-center gap-2">
+                                        <div className="w-1 h-1 rounded-full bg-slate-300"></div>
+                                        {branch.name}
+                                      </td>
+                                      <td className="py-2.5 text-center">
+                                        {branch.claims}
+                                      </td>
+                                      <td className="py-2.5 text-right">
+                                        {branch.amount.toLocaleString()}원
+                                      </td>
+                                      <td className="py-2.5">
+                                        <div className="flex items-center gap-2 pr-4">
+                                          <div className="w-full bg-slate-200 rounded-full h-1">
+                                            <div
+                                              className={`h-1 rounded-full ${
+                                                branch.completionRate < 50
+                                                  ? "bg-red-400"
+                                                  : branch.completionRate < 80
+                                                  ? "bg-amber-400"
+                                                  : "bg-emerald-500"
+                                              }`}
+                                              style={{
+                                                width: `${branch.completionRate}%`,
+                                              }}
+                                            ></div>
+                                          </div>
+                                          <span className="text-[9px] font-bold text-slate-400 w-6">
+                                            {branch.completionRate}%
+                                          </span>
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </React.Fragment>
+                ))
+              )}
             </tbody>
           </table>
         </div>
