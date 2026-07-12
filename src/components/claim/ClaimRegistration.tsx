@@ -1,4 +1,10 @@
-import React, { useState, useRef, ClipboardEvent, DragEvent } from "react";
+import React, {
+  useState,
+  useRef,
+  ClipboardEvent,
+  DragEvent,
+  useEffect,
+} from "react";
 import { supabase } from "../../lib/supabase";
 import {
   CheckCircle2,
@@ -6,11 +12,13 @@ import {
   X,
   UploadCloud,
   ChevronDown,
+  Lock,
 } from "lucide-react";
 
 export default function ClaimRegistration() {
-  // [1] DB 저장을 위한 상태(State) 관리
-  const [submitterName, setSubmitterName] = useState(""); // 💡 신규 추가: 접수자 정보
+  const [submitterInfo, setSubmitterInfo] = useState("로딩 중...");
+  const [submitterNameForDB, setSubmitterNameForDB] = useState("");
+
   const [category, setCategory] = useState("검수리포트");
   const [occurrenceDate, setOccurrenceDate] = useState("");
   const [vehicleName, setVehicleName] = useState("");
@@ -22,7 +30,7 @@ export default function ClaimRegistration() {
   const [returnMileage, setReturnMileage] = useState("");
   const [details, setDetails] = useState("");
 
-  // 추가 정보 (우리 팀)
+  // 진단광고제작팀 추가 정보 (누락 복구됨)
   const [region, setRegion] = useState("");
   const [center, setCenter] = useState("");
   const [managerName, setManagerName] = useState("");
@@ -30,18 +38,32 @@ export default function ClaimRegistration() {
   const [preventiveMeasure, setPreventiveMeasure] = useState("");
   const [improvementPlan, setImprovementPlan] = useState("");
 
-  // [2] 화면 및 UX 제어용 상태
   const [isAccordionOpen, setIsAccordionOpen] = useState(false);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const dateInputRef = useRef<HTMLInputElement>(null);
-
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
+
+  // 접속자 정보 연동
+  useEffect(() => {
+    const fetchUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user && user.user_metadata) {
+        const team = user.user_metadata.team || "소속 미상";
+        const name = user.user_metadata.name || "알 수 없음";
+        setSubmitterInfo(`${team} ${name}`);
+        setSubmitterNameForDB(`${team} ${name}`);
+      }
+    };
+    fetchUser();
+  }, []);
 
   const showToast = (
     message: string,
@@ -51,71 +73,54 @@ export default function ClaimRegistration() {
     setTimeout(() => setToast(null), 3000);
   };
 
-  // 이미지 처리 로직
   const handleAddImages = (files: FileList | File[]) => {
     const newFiles = Array.from(files).filter((file) =>
       file.type.startsWith("image/")
     );
-    if (imageFiles.length + newFiles.length > 10) {
-      showToast("사진은 최대 10장까지만 첨부할 수 있습니다.", "error");
-      return;
-    }
-    const newPreviews = newFiles.map((file) => URL.createObjectURL(file));
+    if (imageFiles.length + newFiles.length > 10)
+      return showToast("사진은 최대 10장까지만 첨부할 수 있습니다.", "error");
     setImageFiles((prev) => [...prev, ...newFiles]);
-    setImagePreviews((prev) => [...prev, ...newPreviews]);
+    setImagePreviews((prev) => [
+      ...prev,
+      ...newFiles.map((f) => URL.createObjectURL(f)),
+    ]);
   };
-  const handlePaste = (e: ClipboardEvent<HTMLDivElement>) => {
-    if (e.clipboardData.files.length > 0) {
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault();
+    if (e.dataTransfer.files.length) handleAddImages(e.dataTransfer.files);
+  };
+  const handlePaste = (e: ClipboardEvent) => {
+    if (e.clipboardData.files.length) {
       e.preventDefault();
       handleAddImages(e.clipboardData.files);
     }
   };
-  const handleDrop = (e: DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    if (e.dataTransfer.files.length > 0) handleAddImages(e.dataTransfer.files);
-  };
-  const handleDragOver = (e: DragEvent<HTMLDivElement>) => e.preventDefault();
   const handleRemoveImage = (index: number) => {
     setImageFiles((prev) => prev.filter((_, i) => i !== index));
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // DB 저장 로직
   const handleSubmit = async () => {
-    // 💡 필수값 검증에 접수자 추가
-    if (!submitterName || !category || !occurrenceDate || !vehicleNumber) {
-      showToast(
-        "접수자 정보, 구분, 발생일, 차량번호는 필수 입력 항목입니다.",
-        "error"
-      );
-      return;
-    }
-
+    if (!category || !occurrenceDate || !vehicleNumber)
+      return showToast("구분, 발생일, 차량번호는 필수입니다.", "error");
     setIsSubmitting(true);
-
     try {
       let uploadedImageUrls: string[] = [];
       if (imageFiles.length > 0) {
         for (const file of imageFiles) {
-          const fileExt = file.name.split(".").pop();
-          const fileName = `${Date.now()}_${Math.random()
+          const filePath = `${Date.now()}_${Math.random()
             .toString(36)
-            .substring(7)}.${fileExt}`;
-          const filePath = `${fileName}`;
-          const { error: uploadError } = await supabase.storage
-            .from("claim_images")
-            .upload(filePath, file);
-          if (uploadError) throw uploadError;
-          const { data } = supabase.storage
-            .from("claim_images")
-            .getPublicUrl(filePath);
-          uploadedImageUrls.push(data.publicUrl);
+            .substring(7)}.${file.name.split(".").pop()}`;
+          await supabase.storage.from("claim_images").upload(filePath, file);
+          uploadedImageUrls.push(
+            supabase.storage.from("claim_images").getPublicUrl(filePath).data
+              .publicUrl
+          );
         }
       }
-
-      const { error: dbError } = await supabase.from("claim_reports").insert([
+      const { error } = await supabase.from("claim_reports").insert([
         {
-          submitter_name: submitterName, // 💡 DB 컬럼 연동
+          submitter_name: submitterNameForDB,
           category,
           occurrence_date: occurrenceDate,
           vehicle_name: vehicleName,
@@ -139,13 +144,10 @@ export default function ClaimRegistration() {
           claim_status: "광고 수정 대기",
         },
       ]);
-
-      if (dbError) throw dbError;
-
+      if (error) throw error;
       showToast("성공적으로 클레임이 등록되었습니다!");
 
-      // 폼 초기화
-      setSubmitterName("");
+      // 등록 후 초기화
       setOccurrenceDate("");
       setVehicleName("");
       setVehicleNumber("");
@@ -164,15 +166,15 @@ export default function ClaimRegistration() {
       setImageFiles([]);
       setImagePreviews([]);
     } catch (error) {
-      console.error("업로드 실패:", error);
-      showToast("등록 중 오류가 발생했습니다. 관리자에게 문의하세요.", "error");
+      showToast("등록 중 오류가 발생했습니다.", "error");
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const inputClass =
-    "w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none";
+    "w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none";
+  const labelClass = "block text-[13px] font-bold text-slate-700 mb-2";
 
   return (
     <div className="relative p-6 max-w-[1400px] mx-auto" onPaste={handlePaste}>
@@ -197,54 +199,42 @@ export default function ClaimRegistration() {
             >
               {toast.message}
             </span>
-            <button
-              onClick={() => setToast(null)}
-              className="ml-2 text-slate-400 hover:text-slate-600"
-            >
-              <X size={16} />
-            </button>
           </div>
         </div>
       )}
 
-      <div className="mb-8">
-        <h2 className="text-2xl font-black text-slate-800">새 클레임 등록</h2>
-        <p className="text-sm text-slate-500 mt-1">
-          클레임 정보를 정확하게 입력해 주십시오. 이미지는 아무 곳에나 Ctrl+V로
-          붙여넣을 수 있습니다.
-        </p>
+      <div className="mb-8 flex justify-between items-end">
+        <div>
+          <h2 className="text-2xl font-black text-slate-800">새 클레임 등록</h2>
+          <p className="text-sm text-slate-500 mt-1">
+            이미지는 아무 곳에나 Ctrl+V로 붙여넣을 수 있습니다.
+          </p>
+        </div>
+
+        {/* 인증된 작성자 뱃지 */}
+        <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-full shadow-sm">
+          <Lock size={14} className="text-blue-400" />
+          <span className="text-xs font-black text-slate-200 tracking-wide">
+            인증된 작성자:
+          </span>
+          <span className="text-sm font-bold text-white">{submitterInfo}</span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
         <div className="xl:col-span-7 space-y-6">
+          {/* 기본 정보 폼 */}
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-3 mb-8 pb-4 border-b border-slate-100">
               <div className="w-1.5 h-5 bg-blue-600 rounded-full"></div>
               <h3 className="text-lg font-black text-slate-800">
                 기본 정보 (필수)
               </h3>
             </div>
 
-            <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-              {/* 💡 최상단 배치: 접수자 정보 */}
-              <div className="col-span-2 bg-blue-50/50 p-4 rounded-xl border border-blue-100 mb-2">
-                <label className="block text-[13px] font-black text-blue-800 mb-1.5">
-                  접수자 정보 (소속 및 이름){" "}
-                  <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={submitterName}
-                  onChange={(e) => setSubmitterName(e.target.value)}
-                  placeholder="예: 거래지원팀 홍길동"
-                  className="w-full h-11 px-4 bg-white border border-blue-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none"
-                />
-              </div>
-
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-[13px] font-bold text-slate-700 mb-1.5">
-                  구분
-                </label>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-6">
+              <div>
+                <label className={labelClass}>구분</label>
                 <select
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
@@ -255,27 +245,22 @@ export default function ClaimRegistration() {
                   <option value="기타">기타</option>
                 </select>
               </div>
-
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-[13px] font-bold text-slate-700 mb-1.5">
-                  발생일
-                </label>
+              <div>
+                <label className={labelClass}>발생일</label>
                 <input
                   type="date"
                   ref={dateInputRef}
                   value={occurrenceDate}
                   onChange={(e) => {
                     setOccurrenceDate(e.target.value);
-                    if (dateInputRef.current) dateInputRef.current.blur();
+                    dateInputRef.current?.blur();
                   }}
                   className={inputClass}
                 />
               </div>
 
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-[13px] font-bold text-slate-700 mb-1.5">
-                  차량명
-                </label>
+              <div>
+                <label className={labelClass}>차량명</label>
                 <input
                   type="text"
                   value={vehicleName}
@@ -284,11 +269,8 @@ export default function ClaimRegistration() {
                   className={inputClass}
                 />
               </div>
-
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-[13px] font-bold text-slate-700 mb-1.5">
-                  차량번호
-                </label>
+              <div>
+                <label className={labelClass}>차량번호</label>
                 <input
                   type="text"
                   value={vehicleNumber}
@@ -298,10 +280,8 @@ export default function ClaimRegistration() {
                 />
               </div>
 
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-[13px] font-bold text-slate-700 mb-1.5">
-                  상사명
-                </label>
+              <div>
+                <label className={labelClass}>상사명</label>
                 <input
                   type="text"
                   value={companyName}
@@ -310,11 +290,8 @@ export default function ClaimRegistration() {
                   className={inputClass}
                 />
               </div>
-
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-[13px] font-bold text-slate-700 mb-1.5">
-                  딜러명
-                </label>
+              <div>
+                <label className={labelClass}>딜러명</label>
                 <input
                   type="text"
                   value={dealerName}
@@ -324,21 +301,8 @@ export default function ClaimRegistration() {
                 />
               </div>
 
-              <div className="col-span-2 sm:col-span-1">
-                <label className="block text-[13px] font-bold text-slate-700 mb-1.5">
-                  보상금액(원)
-                </label>
-                <input
-                  type="number"
-                  value={compensationAmount}
-                  onChange={(e) => setCompensationAmount(e.target.value)}
-                  placeholder="0"
-                  className={inputClass}
-                />
-              </div>
-
-              <div className="col-span-2 sm:col-span-1 flex flex-col justify-center">
-                <label className="block text-[13px] font-bold text-slate-700 mb-2.5">
+              <div className="flex flex-col justify-center bg-slate-50 p-4 rounded-xl border border-slate-100">
+                <label className="block text-[13px] font-bold text-slate-700 mb-3">
                   환불 여부
                 </label>
                 <div
@@ -347,12 +311,12 @@ export default function ClaimRegistration() {
                 >
                   <button
                     type="button"
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ease-in-out focus:outline-none ${
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${
                       isRefunded ? "bg-blue-600" : "bg-slate-300"
                     }`}
                   >
                     <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ease-in-out ${
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${
                         isRefunded ? "translate-x-5" : "translate-x-0.5"
                       }`}
                     />
@@ -367,36 +331,55 @@ export default function ClaimRegistration() {
                 </div>
               </div>
 
-              {isRefunded && (
-                <div className="col-span-2 animate-in fade-in slide-in-from-top-2 duration-300">
-                  <label className="block text-[13px] font-bold text-blue-600 mb-1.5">
-                    반납 주행거리 (환불 시 필수)
-                  </label>
+              <div className="relative h-full">
+                {isRefunded && (
+                  <div className="absolute inset-0 animate-in fade-in slide-in-from-right-4 duration-300 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                    <label className="block text-[13px] font-bold text-blue-800 mb-2">
+                      반납 주행거리 (환불 시 필수)
+                    </label>
+                    <input
+                      type="number"
+                      value={returnMileage}
+                      onChange={(e) => setReturnMileage(e.target.value)}
+                      placeholder="주행거리 입력 (km)"
+                      className="w-full h-11 px-4 bg-white border border-blue-200 rounded-xl text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="col-span-2 bg-red-50/50 p-5 rounded-2xl border border-red-100 mt-2">
+                <label className="block text-[13px] font-black text-red-800 mb-2">
+                  보상금액 (원)
+                </label>
+                <div className="relative">
                   <input
                     type="number"
-                    value={returnMileage}
-                    onChange={(e) => setReturnMileage(e.target.value)}
-                    placeholder="차량 반납 시 주행거리 입력 (km)"
-                    className="w-full h-11 px-4 bg-blue-50 border border-blue-200 rounded-xl text-sm text-blue-900 placeholder:text-blue-300 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none"
+                    value={compensationAmount}
+                    onChange={(e) => setCompensationAmount(e.target.value)}
+                    placeholder="0"
+                    className="w-full h-14 pl-5 pr-12 bg-white border border-red-200 rounded-xl text-lg font-black text-slate-800 placeholder:text-slate-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all outline-none"
                   />
+                  <span className="absolute right-5 top-1/2 -translate-y-1/2 font-black text-red-400">
+                    원
+                  </span>
                 </div>
-              )}
+              </div>
 
-              <div className="col-span-2">
-                <label className="block text-[13px] font-bold text-slate-700 mb-1.5">
-                  상세내용
-                </label>
+              <div className="col-span-2 mt-2">
+                <label className={labelClass}>상세내용 및 경위</label>
                 <textarea
                   rows={3}
                   value={details}
                   onChange={(e) => setDetails(e.target.value)}
-                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none resize-none"
-                  placeholder="클레임이 발생하게 된 상세 경위를 입력해 주십시오."
+                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-blue-500 outline-none resize-none"
+                  placeholder="상세 경위를 입력해 주십시오."
                 ></textarea>
               </div>
             </div>
           </div>
 
+          {/* 💡 복구된 영역: 진단광고제작팀 추가 정보 아코디언 */}
           <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden transition-all">
             <button
               type="button"
@@ -423,9 +406,7 @@ export default function ClaimRegistration() {
             {isAccordionOpen && (
               <div className="p-8 pt-2 border-t border-slate-100 bg-white grid grid-cols-2 gap-x-6 gap-y-5 animate-in slide-in-from-top-4 fade-in duration-300">
                 <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-[13px] font-bold text-slate-700 mb-1.5">
-                    권역
-                  </label>
+                  <label className={labelClass}>권역</label>
                   <input
                     type="text"
                     value={region}
@@ -435,9 +416,7 @@ export default function ClaimRegistration() {
                   />
                 </div>
                 <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-[13px] font-bold text-slate-700 mb-1.5">
-                    지점
-                  </label>
+                  <label className={labelClass}>지점</label>
                   <input
                     type="text"
                     value={center}
@@ -447,9 +426,7 @@ export default function ClaimRegistration() {
                   />
                 </div>
                 <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-[13px] font-bold text-slate-700 mb-1.5">
-                    담당자
-                  </label>
+                  <label className={labelClass}>담당자</label>
                   <input
                     type="text"
                     value={managerName}
@@ -459,9 +436,7 @@ export default function ClaimRegistration() {
                   />
                 </div>
                 <div className="col-span-2 sm:col-span-1">
-                  <label className="block text-[13px] font-bold text-slate-700 mb-1.5">
-                    부위
-                  </label>
+                  <label className={labelClass}>부위</label>
                   <input
                     type="text"
                     value={claimPart}
@@ -471,9 +446,7 @@ export default function ClaimRegistration() {
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-[13px] font-bold text-slate-700 mb-1.5">
-                    재발방지책
-                  </label>
+                  <label className={labelClass}>재발방지책</label>
                   <textarea
                     rows={2}
                     value={preventiveMeasure}
@@ -483,9 +456,7 @@ export default function ClaimRegistration() {
                   ></textarea>
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-[13px] font-bold text-slate-700 mb-1.5">
-                    개선안
-                  </label>
+                  <label className={labelClass}>개선안</label>
                   <textarea
                     rows={2}
                     value={improvementPlan}
@@ -499,6 +470,7 @@ export default function ClaimRegistration() {
           </div>
         </div>
 
+        {/* 우측 사진 첨부 영역 */}
         <div className="xl:col-span-5 flex flex-col">
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 flex-1 flex flex-col">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100">
@@ -520,7 +492,7 @@ export default function ClaimRegistration() {
             </div>
             <div
               onDrop={handleDrop}
-              onDragOver={handleDragOver}
+              onDragOver={(e) => e.preventDefault()}
               className="flex-1 min-h-[300px] border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center p-8 bg-slate-50 hover:bg-blue-50/50 hover:border-blue-300 transition-all cursor-pointer group"
               onClick={() => document.getElementById("fileInput")?.click()}
             >
@@ -551,7 +523,7 @@ export default function ClaimRegistration() {
               />
             </div>
             {imagePreviews.length > 0 && (
-              <div className="mt-6 grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-3 gap-3">
+              <div className="mt-6 grid grid-cols-3 gap-3">
                 {imagePreviews.map((url, index) => (
                   <div key={index} className="relative group aspect-square">
                     <img
@@ -565,7 +537,7 @@ export default function ClaimRegistration() {
                           e.stopPropagation();
                           handleRemoveImage(index);
                         }}
-                        className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 hover:scale-110 transition-all shadow-lg"
+                        className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 hover:scale-110"
                       >
                         <X size={16} />
                       </button>
@@ -585,11 +557,11 @@ export default function ClaimRegistration() {
           className={`px-10 py-4 rounded-2xl font-black text-lg shadow-lg transition-all flex items-center gap-3 ${
             isSubmitting
               ? "bg-slate-400 text-white cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-700 hover:shadow-blue-600/30 text-white hover:-translate-y-1"
+              : "bg-blue-600 hover:bg-blue-700 hover:-translate-y-1"
           }`}
         >
           {isSubmitting ? (
-            <>처리 중입니다...</>
+            "처리 중입니다..."
           ) : (
             <>
               <CheckCircle2 size={24} />
