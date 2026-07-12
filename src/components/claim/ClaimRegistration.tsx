@@ -91,7 +91,24 @@ export default function ClaimRegistration() {
     if (e.dataTransfer.files.length) handleAddImages(e.dataTransfer.files);
   };
   const handlePaste = (e: ClipboardEvent) => {
-    if (e.clipboardData.files.length) {
+    // 1. 클립보드에 이미지 데이터(스크린샷, 웹 복사 등)가 있는지 먼저 확인
+    const items = e.clipboardData.items;
+    const files: File[] = [];
+
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith("image/")) {
+        const file = items[i].getAsFile();
+        if (file) files.push(file);
+      }
+    }
+
+    // 2. 만약 이미지 데이터가 있으면 업로드 처리
+    if (files.length > 0) {
+      e.preventDefault();
+      handleAddImages(files);
+    }
+    // 3. 만약 파일 자체가 복사된 경우(기존 기능 유지)
+    else if (e.clipboardData.files.length > 0) {
       e.preventDefault();
       handleAddImages(e.clipboardData.files);
     }
@@ -258,7 +275,7 @@ export default function ClaimRegistration() {
             <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
               <div className="w-1.5 h-5 bg-blue-600 rounded-full"></div>
               <h3 className="text-base font-black text-slate-800">
-                기본 접수 정보
+                기본 정보 (필수)
               </h3>
             </div>
 
@@ -456,9 +473,9 @@ export default function ClaimRegistration() {
               <div className="flex items-center gap-3">
                 <div className="w-1.5 h-5 bg-purple-500 rounded-full"></div>
                 <h3 className="text-base font-black text-slate-800">
-                  진단광고제작팀 추가 정보{" "}
+                  추가 정보{" "}
                   <span className="text-[11px] font-bold text-slate-400 ml-2">
-                    (선택)
+                    (진단광고제작팀)
                   </span>
                 </h3>
               </div>
@@ -565,7 +582,7 @@ export default function ClaimRegistration() {
                 <UploadCloud className="text-blue-500" size={28} />
               </div>
               <h4 className="text-sm font-black text-slate-700 mb-1">
-                클릭 또는 드래그 앤 드롭
+                드래그 앤 드롭 또는 복사 가능
               </h4>
               <p className="text-[11px] text-slate-400 font-bold">
                 최대 10장 업로드 가능
