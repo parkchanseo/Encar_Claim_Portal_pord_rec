@@ -1,7 +1,7 @@
 {
-  "name": "react-typescript",
+  "name": "encar-claim-portal",
   "version": "1.0.0",
-  "description": "React and TypeScript example starter project",
+  "description": "Encar Claim Portal - Legacy Compatible Version",
   "keywords": [
     "typescript",
     "react",
@@ -9,23 +9,23 @@
   ],
   "main": "src/index.tsx",
   "dependencies": {
-    "@supabase/supabase-js": "^2.110.2",
+    "@supabase/supabase-js": "2.107.0",
     "loader-utils": "3.2.1",
-    "lucide-react": "1.24.0",
+    "lucide-react": "1.14.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "react-is": "19.2.7",
     "react-scripts": "5.0.1",
-    "recharts": "3.9.1"
+    "recharts": "2.12.0",
+    "xlsx": "0.18.5"
   },
   "devDependencies": {
     "@types/react": "18.2.38",
     "@types/react-dom": "18.2.15",
-    "typescript": "^7.0.2"
+    "typescript": "5.3.3"
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "SKIP_PREFLIGHT_CHECK=true react-scripts build",
+    "build": "react-scripts build",
     "test": "react-scripts test --env=jsdom",
     "eject": "react-scripts eject"
   },

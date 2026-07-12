@@ -3,8 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>클레임 포털 (테스트)</title>
+    <title>엔카 클레임 포털 (Encar Claim Portal)</title>
 
+    <!-- 캐시 방지 (형님 기존 설정 유지) -->
     <meta
       http-equiv="Cache-Control"
       content="no-cache, no-store, must-revalidate"
@@ -12,16 +13,61 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
 
-    <!-- 💡 여기서 Tailwind CSS 마법의 페인트를 불러옵니다 -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Pretendard 폰트 -->
     <link
       rel="stylesheet"
       as="style"
       crossorigin
       href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/variable/pretendardvariable.css"
     />
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Tailwind 설정 및 커스텀 스타일 (엔터프라이즈 UX) -->
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: [
+                '"Pretendard Variable"',
+                "Pretendard",
+                "-apple-system",
+                "BlinkMacSystemFont",
+                "system-ui",
+                "Roboto",
+                "sans-serif",
+              ],
+            },
+          },
+        },
+      };
+    </script>
+    <style>
+      /* 폰트 전역 적용 */
+      body {
+        font-family: "Pretendard Variable", sans-serif;
+      }
+
+      /* 스크롤바 커스텀 (모달 및 뷰어용) */
+      .custom-scrollbar::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb {
+        background: #cbd5e1;
+        border-radius: 4px;
+      }
+      .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+        background: #94a3b8;
+      }
+    </style>
   </head>
-  <body>
+  <body class="bg-slate-50">
     <noscript>이 앱을 실행하려면 자바스크립트가 필요합니다.</noscript>
     <div id="root"></div>
   </body>
