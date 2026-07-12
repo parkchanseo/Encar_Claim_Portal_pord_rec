@@ -115,6 +115,8 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               >
                 <option value="거래서비스지원팀">거래서비스지원팀</option>
                 <option value="진단광고제작팀">진단광고제작팀</option>
+                <option value="거래서비스그룹">거래서비스그룹</option>
+                <option value="B2C사업실">B2C사업실</option>
               </select>
               <input
                 type="text"
