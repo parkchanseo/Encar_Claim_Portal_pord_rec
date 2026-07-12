@@ -324,9 +324,7 @@ export default function ClaimDashboard({
               {currentTotalAmount.toLocaleString()}
               <span className="text-sm font-bold text-slate-500 ml-1">원</span>
             </h3>
-            <p className="text-[11px] font-bold text-slate-400">
-              재무적 손실 규모
-            </p>
+            <p className="text-[11px] font-bold text-slate-400">클레임 비용</p>
           </div>
         </div>
 
@@ -345,7 +343,7 @@ export default function ClaimDashboard({
               <span className="text-sm font-bold text-slate-500 ml-1">%</span>
             </h3>
             <p className="text-[11px] font-bold text-slate-400">
-              광고 수정 평균 달성률
+              광고 수정 완료
             </p>
           </div>
         </div>
@@ -539,8 +537,7 @@ export default function ClaimDashboard({
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden flex flex-col w-full">
         <div className="p-4 border-b bg-slate-50 font-black text-sm text-slate-700 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <ListTree size={16} className="text-blue-600" /> 지점별 타겟팅 및
-            이행률
+            <ListTree size={16} className="text-blue-600" /> 클레임 이력
           </div>
           <span className="text-[10px] text-slate-400 font-bold">
             행을 클릭하여 세부 지점 확인
@@ -553,7 +550,7 @@ export default function ClaimDashboard({
                 <th className="px-6 py-4">권역</th>
                 <th className="px-6 py-4 text-center">클레임 발생</th>
                 <th className="px-6 py-4 text-right">보상 총액</th>
-                <th className="px-6 py-4 w-1/3">광고 수정 달성률</th>
+                <th className="px-6 py-4 w-1/3">광고 수정 완료</th>
               </tr>
             </thead>
             <tbody className="text-sm font-medium text-slate-600 divide-y divide-slate-100">

@@ -283,7 +283,7 @@ export default function ClaimRegistration() {
               {/* 세트 1: 구분 & 발생일 (커스텀 캘린더) */}
               <div className="grid grid-cols-2 gap-6">
                 <div className="relative">
-                  <label className={labelClass}>구분</label>
+                  <label className={labelClass}>클레임 구분</label>
                   <div
                     onClick={() => setIsCategoryOpen(!isCategoryOpen)}
                     className={`${inputClass} flex items-center justify-between cursor-pointer select-none`}
@@ -496,7 +496,7 @@ export default function ClaimRegistration() {
                     value={region}
                     onChange={(e) => setRegion(e.target.value)}
                     className={inputClass}
-                    placeholder="예: 수도권"
+                    placeholder="예: 서울"
                   />
                 </div>
                 <div className="col-span-2 sm:col-span-1">
@@ -506,7 +506,7 @@ export default function ClaimRegistration() {
                     value={center}
                     onChange={(e) => setCenter(e.target.value)}
                     className={inputClass}
-                    placeholder="예: 성산직영점"
+                    placeholder="예: 오토플렉스"
                   />
                 </div>
                 <div className="col-span-2 sm:col-span-1">
@@ -516,7 +516,7 @@ export default function ClaimRegistration() {
                     value={managerName}
                     onChange={(e) => setManagerName(e.target.value)}
                     className={inputClass}
-                    placeholder="담당 매니저명"
+                    placeholder="담당 CAM"
                   />
                 </div>
                 <div className="col-span-2 sm:col-span-1">
@@ -530,7 +530,7 @@ export default function ClaimRegistration() {
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className={labelClass}>재발방지책</label>
+                  <label className={labelClass}>재발 방지책</label>
                   <textarea
                     rows={2}
                     value={preventiveMeasure}
@@ -539,7 +539,7 @@ export default function ClaimRegistration() {
                   ></textarea>
                 </div>
                 <div className="col-span-2">
-                  <label className={labelClass}>개선안</label>
+                  <label className={labelClass}>시스템 개선안</label>
                   <textarea
                     rows={2}
                     value={improvementPlan}
