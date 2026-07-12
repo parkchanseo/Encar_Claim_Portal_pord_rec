@@ -1,28 +1,44 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   LayoutDashboard,
   Edit,
   ClipboardCheck,
   Menu,
   ChevronRight,
-  Search,
   Bell,
   Settings,
   LogOut,
   ChevronDown,
+  Lock,
 } from "lucide-react";
-// 👇 아까 만든 '새 클레임 등록' 화면 임포트 (경로를 형님 환경에 맞게 확인해주세요)
 import ClaimRegistration from "../components/claim/ClaimRegistration";
 import ClaimViewer from "../components/claim/ClaimViewer";
 import ClaimDashboard from "../components/claim/ClaimDashboard";
+// 💡 경로 에러 수정 완료 (점 2개 -> 1개)
+import { supabase } from "../lib/supabase";
 
 export default function ClaimPortal() {
-  // 화면 제어용 상태
-  const [activeMenu, setActiveMenu] = useState("claim-register"); // 기본 화면: 새 클레임 등록
+  const [activeMenu, setActiveMenu] = useState("claim-register");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [expandedMenu, setExpandedMenu] = useState<string | null>("claim-menu");
 
-  // 거래서비스지원팀 전용 사이드바 메뉴 구성
+  // 글로벌 유저 정보
+  const [userInfo, setUserInfo] = useState("로딩 중...");
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user && user.user_metadata) {
+        const team = user.user_metadata.team || "소속 미상";
+        const name = user.user_metadata.name || "알 수 없음";
+        setUserInfo(`${team} ${name}`);
+      }
+    };
+    fetchUser();
+  }, []);
+
   const claimMenuGroups = [
     {
       id: "claim-menu",
@@ -48,7 +64,6 @@ export default function ClaimPortal() {
     },
   ];
 
-  // 상단 헤더 경로(Breadcrumb) 표시용 함수
   const getBreadcrumb = (menu: string) => {
     const map: Record<string, string> = {
       "claim-dashboard": "클레임 관리 센터 / 클레임 대시보드",
@@ -58,7 +73,6 @@ export default function ClaimPortal() {
     return map[menu] || "클레임 포털";
   };
 
-  // 1. 거래서비스지원팀 맞춤형 Sidebar
   const renderSidebar = () => (
     <aside
       className={`transition-all duration-300 bg-slate-900 text-slate-300 flex flex-col shrink-0 fixed inset-y-0 left-0 z-50 md:relative h-full ${
@@ -84,7 +98,6 @@ export default function ClaimPortal() {
           const hasActiveSub = group.items.some(
             (item) => item.id === activeMenu
           );
-
           return (
             <div key={group.id} className="space-y-1">
               <button
@@ -118,7 +131,6 @@ export default function ClaimPortal() {
                   </span>
                 )}
               </button>
-
               {isOpen && sidebarOpen && (
                 <div className="pl-4 mt-1 space-y-1 animate-in slide-in-from-top-2 duration-200">
                   <div className="pl-3 border-l border-slate-700/50 space-y-1 py-1">
@@ -143,7 +155,6 @@ export default function ClaimPortal() {
           );
         })}
       </div>
-
       <div className="p-4 border-t border-slate-800 shrink-0">
         {sidebarOpen ? (
           <div className="flex items-center justify-between bg-slate-800 p-3 rounded-2xl">
@@ -173,7 +184,6 @@ export default function ClaimPortal() {
     </aside>
   );
 
-  // 2. 상단 Header
   const renderHeader = () => (
     <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 shrink-0 z-20">
       <div className="flex items-center gap-4">
@@ -194,6 +204,11 @@ export default function ClaimPortal() {
         </div>
       </div>
       <div className="flex items-center gap-4">
+        {/* 💡 히든 속성을 제거하여 유저 뱃지가 항상 또렷하게 보이도록 수정 */}
+        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-full shadow-sm">
+          <Lock size={12} className="text-blue-500" />
+          <span className="text-xs font-black text-slate-700">{userInfo}</span>
+        </div>
         <button className="p-2 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-full transition-colors">
           <Bell size={18} />
         </button>
@@ -204,12 +219,10 @@ export default function ClaimPortal() {
     </header>
   );
 
-  // 3. 메인 콘텐츠 렌더링 (메뉴 선택에 따라 컴포넌트 교체)
   const renderMainContent = () => {
     switch (activeMenu) {
       case "claim-register":
         return <ClaimRegistration />;
-      case "claim-list":
       case "claim-list":
         return <ClaimViewer />;
       case "claim-dashboard":

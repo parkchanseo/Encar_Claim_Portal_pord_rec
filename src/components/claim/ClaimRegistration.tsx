@@ -12,25 +12,26 @@ import {
   X,
   UploadCloud,
   ChevronDown,
-  Lock,
+  Save,
+  Edit,
+  Calendar,
 } from "lucide-react";
 
 export default function ClaimRegistration() {
-  const [submitterInfo, setSubmitterInfo] = useState("로딩 중...");
   const [submitterNameForDB, setSubmitterNameForDB] = useState("");
-
   const [category, setCategory] = useState("검수리포트");
   const [occurrenceDate, setOccurrenceDate] = useState("");
   const [vehicleName, setVehicleName] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [dealerName, setDealerName] = useState("");
+
+  // 💡 콤마 처리를 위해 raw value와 display value 분리
   const [compensationAmount, setCompensationAmount] = useState("");
   const [isRefunded, setIsRefunded] = useState(false);
   const [returnMileage, setReturnMileage] = useState("");
   const [details, setDetails] = useState("");
 
-  // 진단광고제작팀 추가 정보 (누락 복구됨)
   const [region, setRegion] = useState("");
   const [center, setCenter] = useState("");
   const [managerName, setManagerName] = useState("");
@@ -38,28 +39,28 @@ export default function ClaimRegistration() {
   const [preventiveMeasure, setPreventiveMeasure] = useState("");
   const [improvementPlan, setImprovementPlan] = useState("");
 
+  const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [isAccordionOpen, setIsAccordionOpen] = useState(false);
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const dateInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null); // 자동 확장을 위한 Ref
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
   } | null>(null);
 
-  // 접속자 정보 연동
   useEffect(() => {
     const fetchUser = async () => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
       if (user && user.user_metadata) {
-        const team = user.user_metadata.team || "소속 미상";
-        const name = user.user_metadata.name || "알 수 없음";
-        setSubmitterInfo(`${team} ${name}`);
-        setSubmitterNameForDB(`${team} ${name}`);
+        setSubmitterNameForDB(
+          `${user.user_metadata.team || ""} ${user.user_metadata.name || ""}`
+        );
       }
     };
     fetchUser();
@@ -98,6 +99,24 @@ export default function ClaimRegistration() {
   const handleRemoveImage = (index: number) => {
     setImageFiles((prev) => prev.filter((_, i) => i !== index));
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  // 💡 콤마 자동 생성 핸들러
+  const handleCompensationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const rawValue = e.target.value.replace(/[^0-9]/g, ""); // 숫자만 추출
+    setCompensationAmount(rawValue);
+  };
+  const displayCompensation = compensationAmount
+    ? Number(compensationAmount).toLocaleString()
+    : "";
+
+  // 💡 자동 확장 텍스트 박스 핸들러
+  const handleDetailsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    setDetails(e.target.value);
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "auto"; // 높이 초기화
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`; // 내용물에 맞게 증가
+    }
   };
 
   const handleSubmit = async () => {
@@ -146,8 +165,6 @@ export default function ClaimRegistration() {
       ]);
       if (error) throw error;
       showToast("성공적으로 클레임이 등록되었습니다!");
-
-      // 등록 후 초기화
       setOccurrenceDate("");
       setVehicleName("");
       setVehicleNumber("");
@@ -173,11 +190,14 @@ export default function ClaimRegistration() {
   };
 
   const inputClass =
-    "w-full h-12 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none";
-  const labelClass = "block text-[13px] font-bold text-slate-700 mb-2";
+    "w-full h-11 px-4 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all outline-none";
+  const labelClass = "block text-[13px] font-black text-slate-700 mb-1.5";
 
   return (
-    <div className="relative p-6 max-w-[1400px] mx-auto" onPaste={handlePaste}>
+    <div
+      className="relative animate-in fade-in duration-500 pb-20"
+      onPaste={handlePaste}
+    >
       {toast && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-300">
           <div
@@ -203,208 +223,255 @@ export default function ClaimRegistration() {
         </div>
       )}
 
-      <div className="mb-8 flex justify-between items-end">
+      {/* 💡 [UX] 대시보드와 100% 동일한 패밀리룩 헤더 타이틀 적용 */}
+      <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-black text-slate-800">새 클레임 등록</h2>
-          <p className="text-sm text-slate-500 mt-1">
-            이미지는 아무 곳에나 Ctrl+V로 붙여넣을 수 있습니다.
+          <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
+            <Edit size={24} className="text-blue-600" /> 새 클레임 등록
+          </h2>
+          <p className="text-[11px] font-bold text-slate-500 mt-1 ml-8">
+            클레임 기본 정보 및 증빙 사진 접수
           </p>
         </div>
-
-        {/* 인증된 작성자 뱃지 */}
-        <div className="flex items-center gap-2 px-4 py-2 bg-slate-800 rounded-full shadow-sm">
-          <Lock size={14} className="text-blue-400" />
-          <span className="text-xs font-black text-slate-200 tracking-wide">
-            인증된 작성자:
-          </span>
-          <span className="text-sm font-bold text-white">{submitterInfo}</span>
-        </div>
+        <button
+          onClick={handleSubmit}
+          disabled={isSubmitting}
+          className={`px-6 py-2 rounded-xl text-sm font-black shadow-md transition-all flex items-center gap-2 ${
+            isSubmitting
+              ? "bg-slate-400 text-white cursor-not-allowed"
+              : "bg-blue-600 text-white hover:bg-blue-700 hover:-translate-y-0.5"
+          }`}
+        >
+          {isSubmitting ? (
+            "처리 중..."
+          ) : (
+            <>
+              <Save size={16} /> 시스템에 등록하기
+            </>
+          )}
+        </button>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 relative">
         <div className="xl:col-span-7 space-y-6">
-          {/* 기본 정보 폼 */}
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-            <div className="flex items-center gap-3 mb-8 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
               <div className="w-1.5 h-5 bg-blue-600 rounded-full"></div>
-              <h3 className="text-lg font-black text-slate-800">
-                기본 정보 (필수)
+              <h3 className="text-base font-black text-slate-800">
+                기본 접수 정보
               </h3>
             </div>
 
-            <div className="grid grid-cols-2 gap-x-6 gap-y-6">
-              <div>
-                <label className={labelClass}>구분</label>
-                <select
-                  value={category}
-                  onChange={(e) => setCategory(e.target.value)}
-                  className={inputClass}
-                >
-                  <option value="검수리포트">검수리포트</option>
-                  <option value="진단광고">진단광고</option>
-                  <option value="기타">기타</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelClass}>발생일</label>
-                <input
-                  type="date"
-                  ref={dateInputRef}
-                  value={occurrenceDate}
-                  onChange={(e) => {
-                    setOccurrenceDate(e.target.value);
-                    dateInputRef.current?.blur();
-                  }}
-                  className={inputClass}
-                />
-              </div>
-
-              <div>
-                <label className={labelClass}>차량명</label>
-                <input
-                  type="text"
-                  value={vehicleName}
-                  onChange={(e) => setVehicleName(e.target.value)}
-                  placeholder="예: 쏘나타 (DN8)"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>차량번호</label>
-                <input
-                  type="text"
-                  value={vehicleNumber}
-                  onChange={(e) => setVehicleNumber(e.target.value)}
-                  placeholder="예: 12가 3456"
-                  className={inputClass}
-                />
-              </div>
-
-              <div>
-                <label className={labelClass}>상사명</label>
-                <input
-                  type="text"
-                  value={companyName}
-                  onChange={(e) => setCompanyName(e.target.value)}
-                  placeholder="상사명 입력"
-                  className={inputClass}
-                />
-              </div>
-              <div>
-                <label className={labelClass}>딜러명</label>
-                <input
-                  type="text"
-                  value={dealerName}
-                  onChange={(e) => setDealerName(e.target.value)}
-                  placeholder="딜러명 입력"
-                  className={inputClass}
-                />
-              </div>
-
-              <div className="flex flex-col justify-center bg-slate-50 p-4 rounded-xl border border-slate-100">
-                <label className="block text-[13px] font-bold text-slate-700 mb-3">
-                  환불 여부
-                </label>
-                <div
-                  className="flex items-center space-x-3 cursor-pointer"
-                  onClick={() => setIsRefunded(!isRefunded)}
-                >
-                  <button
-                    type="button"
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors duration-300 ${
-                      isRefunded ? "bg-blue-600" : "bg-slate-300"
-                    }`}
+            <div className="space-y-6">
+              {/* 세트 1: 구분 & 발생일 (커스텀 캘린더) */}
+              <div className="grid grid-cols-2 gap-6">
+                <div className="relative">
+                  <label className={labelClass}>구분</label>
+                  <div
+                    onClick={() => setIsCategoryOpen(!isCategoryOpen)}
+                    className={`${inputClass} flex items-center justify-between cursor-pointer select-none`}
                   >
-                    <span
-                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${
-                        isRefunded ? "translate-x-5" : "translate-x-0.5"
+                    <span>{category}</span>
+                    <ChevronDown
+                      size={16}
+                      className={`text-slate-400 transition-transform ${
+                        isCategoryOpen ? "rotate-180" : ""
                       }`}
                     />
-                  </button>
-                  <span
-                    className={`text-sm font-bold ${
-                      isRefunded ? "text-blue-600" : "text-slate-500"
-                    }`}
-                  >
-                    {isRefunded ? "환불 진행 (On)" : "해당 없음 (Off)"}
-                  </span>
+                  </div>
+                  {isCategoryOpen && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg z-10 overflow-hidden animate-in fade-in slide-in-from-top-2">
+                      {["검수리포트", "진단광고", "기타"].map((cat) => (
+                        <div
+                          key={cat}
+                          onClick={() => {
+                            setCategory(cat);
+                            setIsCategoryOpen(false);
+                          }}
+                          className="px-4 py-3 text-sm font-bold text-slate-700 hover:bg-blue-50 hover:text-blue-600 cursor-pointer transition-colors"
+                        >
+                          {cat}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div>
+                  <label className={labelClass}>발생일</label>
+                  <div className="relative">
+                    {/* 💡 기본 달력 아이콘 숨기고 전체 영역 클릭 가능하도록 CSS 트릭 적용 */}
+                    <input
+                      type="date"
+                      ref={dateInputRef}
+                      value={occurrenceDate}
+                      onChange={(e) => {
+                        setOccurrenceDate(e.target.value);
+                        dateInputRef.current?.blur();
+                      }}
+                      className={`${inputClass} appearance-none [&::-webkit-calendar-picker-indicator]:opacity-0 [&::-webkit-calendar-picker-indicator]:absolute [&::-webkit-calendar-picker-indicator]:inset-0 [&::-webkit-calendar-picker-indicator]:w-full [&::-webkit-calendar-picker-indicator]:h-full [&::-webkit-calendar-picker-indicator]:cursor-pointer relative z-10 bg-transparent`}
+                    />
+                    <Calendar
+                      size={16}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none z-0"
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="relative h-full">
-                {isRefunded && (
-                  <div className="absolute inset-0 animate-in fade-in slide-in-from-right-4 duration-300 bg-blue-50/50 p-4 rounded-xl border border-blue-100">
-                    <label className="block text-[13px] font-bold text-blue-800 mb-2">
-                      반납 주행거리 (환불 시 필수)
-                    </label>
-                    <input
-                      type="number"
-                      value={returnMileage}
-                      onChange={(e) => setReturnMileage(e.target.value)}
-                      placeholder="주행거리 입력 (km)"
-                      className="w-full h-11 px-4 bg-white border border-blue-200 rounded-xl text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
-                    />
-                  </div>
-                )}
+              {/* 세트 2: 차량명 & 차량번호 */}
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className={labelClass}>차량명</label>
+                  <input
+                    type="text"
+                    value={vehicleName}
+                    onChange={(e) => setVehicleName(e.target.value)}
+                    placeholder="예: 쏘나타 (DN8)"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>차량번호</label>
+                  <input
+                    type="text"
+                    value={vehicleNumber}
+                    onChange={(e) => setVehicleNumber(e.target.value)}
+                    placeholder="예: 12가 3456"
+                    className={inputClass}
+                  />
+                </div>
               </div>
 
-              <div className="col-span-2 bg-red-50/50 p-5 rounded-2xl border border-red-100 mt-2">
-                <label className="block text-[13px] font-black text-red-800 mb-2">
+              {/* 세트 3: 상사명 & 딜러명 */}
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className={labelClass}>상사명</label>
+                  <input
+                    type="text"
+                    value={companyName}
+                    onChange={(e) => setCompanyName(e.target.value)}
+                    placeholder="상사명 입력"
+                    className={inputClass}
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>딜러명</label>
+                  <input
+                    type="text"
+                    value={dealerName}
+                    onChange={(e) => setDealerName(e.target.value)}
+                    placeholder="딜러명 입력"
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+
+              {/* 💡 위치 이동 밎 콤마 자동화: 보상 금액 */}
+              <div className="pt-2">
+                <label className="block text-[13px] font-black text-red-600 mb-1.5">
                   보상금액 (원)
                 </label>
                 <div className="relative">
                   <input
-                    type="number"
-                    value={compensationAmount}
-                    onChange={(e) => setCompensationAmount(e.target.value)}
+                    type="text"
+                    value={displayCompensation}
+                    onChange={handleCompensationChange}
                     placeholder="0"
-                    className="w-full h-14 pl-5 pr-12 bg-white border border-red-200 rounded-xl text-lg font-black text-slate-800 placeholder:text-slate-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/20 transition-all outline-none"
+                    className="w-full h-12 pl-4 pr-12 bg-red-50/50 border border-red-200 rounded-xl text-base font-black text-red-700 placeholder:text-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all outline-none"
                   />
-                  <span className="absolute right-5 top-1/2 -translate-y-1/2 font-black text-red-400">
+                  <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-red-400 text-sm">
                     원
                   </span>
                 </div>
               </div>
 
-              <div className="col-span-2 mt-2">
+              {/* 💡 세트 4: 환불 여부 토글 & 반납 주행거리 완벽 대칭 */}
+              <div className="grid grid-cols-2 gap-6">
+                <div>
+                  <label className={labelClass}>환불 여부</label>
+                  <div className="h-11 flex items-center px-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setIsRefunded(!isRefunded)}
+                      className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-300 ${
+                        isRefunded ? "bg-blue-600" : "bg-slate-300"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white shadow-sm transition-transform duration-300 ${
+                          isRefunded ? "translate-x-4" : "translate-x-0.5"
+                        }`}
+                      />
+                    </button>
+                    <span
+                      className={`ml-3 text-[13px] font-bold ${
+                        isRefunded ? "text-blue-600" : "text-slate-500"
+                      }`}
+                    >
+                      {isRefunded ? "환불 진행" : "해당 없음"}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <label className={labelClass}>반납 주행거리</label>
+                  {isRefunded ? (
+                    <div className="animate-in fade-in duration-300">
+                      <input
+                        type="number"
+                        value={returnMileage}
+                        onChange={(e) => setReturnMileage(e.target.value)}
+                        placeholder="주행거리 (km)"
+                        className={inputClass}
+                      />
+                    </div>
+                  ) : (
+                    <div className="h-11 bg-slate-50 border border-slate-100 rounded-xl flex items-center px-4 text-slate-400 text-[13px] font-bold select-none">
+                      해당 없음
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 💡 스마트 폼: 자동 확장 텍스트 박스 */}
+              <div className="pt-2">
                 <label className={labelClass}>상세내용 및 경위</label>
                 <textarea
-                  rows={3}
+                  ref={textareaRef}
                   value={details}
-                  onChange={(e) => setDetails(e.target.value)}
-                  className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-blue-500 outline-none resize-none"
+                  onChange={handleDetailsChange}
+                  style={{ minHeight: "48px", maxHeight: "200px" }}
+                  className="w-full p-4 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 outline-none resize-none overflow-y-auto custom-scrollbar leading-relaxed"
                   placeholder="상세 경위를 입력해 주십시오."
-                ></textarea>
+                />
               </div>
             </div>
           </div>
 
-          {/* 💡 복구된 영역: 진단광고제작팀 추가 정보 아코디언 */}
           <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden transition-all">
             <button
               type="button"
               onClick={() => setIsAccordionOpen(!isAccordionOpen)}
-              className="w-full p-6 flex justify-between items-center bg-white hover:bg-slate-50 transition-colors focus:outline-none"
+              className="w-full p-8 flex justify-between items-center bg-white hover:bg-slate-50 transition-colors focus:outline-none"
             >
               <div className="flex items-center gap-3">
                 <div className="w-1.5 h-5 bg-purple-500 rounded-full"></div>
-                <h3 className="text-lg font-black text-slate-800">
+                <h3 className="text-base font-black text-slate-800">
                   진단광고제작팀 추가 정보{" "}
-                  <span className="text-sm font-medium text-slate-400 ml-2">
-                    (선택 입력)
+                  <span className="text-[11px] font-bold text-slate-400 ml-2">
+                    (선택)
                   </span>
                 </h3>
               </div>
               <div
-                className={`p-2 rounded-full bg-slate-100 text-slate-500 transition-transform duration-300 ${
-                  isAccordionOpen ? "rotate-180" : ""
+                className={`text-slate-400 transition-transform duration-300 ${
+                  isAccordionOpen ? "rotate-180 text-purple-500" : ""
                 }`}
               >
                 <ChevronDown size={18} />
               </div>
             </button>
             {isAccordionOpen && (
-              <div className="p-8 pt-2 border-t border-slate-100 bg-white grid grid-cols-2 gap-x-6 gap-y-5 animate-in slide-in-from-top-4 fade-in duration-300">
+              <div className="p-8 pt-0 grid grid-cols-2 gap-6 animate-in slide-in-from-top-4 fade-in duration-300 border-t border-slate-100 mt-4">
                 <div className="col-span-2 sm:col-span-1">
                   <label className={labelClass}>권역</label>
                   <input
@@ -451,8 +518,7 @@ export default function ClaimRegistration() {
                     rows={2}
                     value={preventiveMeasure}
                     onChange={(e) => setPreventiveMeasure(e.target.value)}
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none resize-none"
-                    placeholder="재발방지책을 입력하세요"
+                    className="w-full p-4 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none resize-none focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 transition-all"
                   ></textarea>
                 </div>
                 <div className="col-span-2">
@@ -461,8 +527,7 @@ export default function ClaimRegistration() {
                     rows={2}
                     value={improvementPlan}
                     onChange={(e) => setImprovementPlan(e.target.value)}
-                    className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none resize-none"
-                    placeholder="시스템 개선안을 입력하세요"
+                    className="w-full p-4 bg-white border border-slate-200 rounded-xl text-sm font-bold outline-none resize-none focus:border-purple-500 focus:ring-4 focus:ring-purple-500/10 transition-all"
                   ></textarea>
                 </div>
               </div>
@@ -470,20 +535,20 @@ export default function ClaimRegistration() {
           </div>
         </div>
 
-        {/* 우측 사진 첨부 영역 */}
-        <div className="xl:col-span-5 flex flex-col">
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 flex-1 flex flex-col">
+        {/* 우측: 사진 첨부 영역 */}
+        <div className="xl:col-span-5 relative">
+          <div className="sticky top-6 flex flex-col bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="w-1.5 h-5 bg-emerald-500 rounded-full"></div>
-                <h3 className="text-lg font-black text-slate-800">
+                <h3 className="text-base font-black text-slate-800">
                   증빙 사진 첨부
                 </h3>
               </div>
               <span
-                className={`text-xs font-bold px-3 py-1 rounded-full ${
+                className={`text-[11px] font-black px-3 py-1 rounded-md ${
                   imageFiles.length > 0
-                    ? "bg-blue-50 text-blue-600"
+                    ? "bg-blue-50 text-blue-600 border border-blue-100"
                     : "bg-slate-100 text-slate-500"
                 }`}
               >
@@ -493,23 +558,17 @@ export default function ClaimRegistration() {
             <div
               onDrop={handleDrop}
               onDragOver={(e) => e.preventDefault()}
-              className="flex-1 min-h-[300px] border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center p-8 bg-slate-50 hover:bg-blue-50/50 hover:border-blue-300 transition-all cursor-pointer group"
+              className="flex-1 min-h-[220px] border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center p-6 bg-slate-50 hover:bg-blue-50/50 hover:border-blue-300 transition-all cursor-pointer group mb-6"
               onClick={() => document.getElementById("fileInput")?.click()}
             >
-              <div className="w-16 h-16 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <UploadCloud className="text-blue-500" size={32} />
+              <div className="w-14 h-14 bg-white rounded-full shadow-sm flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                <UploadCloud className="text-blue-500" size={28} />
               </div>
-              <h4 className="text-base font-black text-slate-700 mb-2">
-                클릭하여 파일 선택
+              <h4 className="text-sm font-black text-slate-700 mb-1">
+                클릭 또는 드래그 앤 드롭
               </h4>
-              <p className="text-sm text-slate-500 text-center leading-relaxed">
-                또는 이미지를 이곳으로{" "}
-                <span className="font-bold text-blue-600">드래그 앤 드롭</span>{" "}
-                하세요.
-                <br />
-                <span className="text-xs bg-slate-200 text-slate-600 px-2 py-0.5 rounded mt-2 inline-block">
-                  Ctrl + V 지원
-                </span>
+              <p className="text-[11px] text-slate-400 font-bold">
+                최대 10장 업로드 가능
               </p>
               <input
                 id="fileInput"
@@ -522,8 +581,9 @@ export default function ClaimRegistration() {
                 }
               />
             </div>
+
             {imagePreviews.length > 0 && (
-              <div className="mt-6 grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-3 max-h-[300px] overflow-y-auto custom-scrollbar pr-1">
                 {imagePreviews.map((url, index) => (
                   <div key={index} className="relative group aspect-square">
                     <img
@@ -548,27 +608,6 @@ export default function ClaimRegistration() {
             )}
           </div>
         </div>
-      </div>
-
-      <div className="mt-8 flex justify-end">
-        <button
-          onClick={handleSubmit}
-          disabled={isSubmitting}
-          className={`px-10 py-4 rounded-2xl font-black text-lg shadow-lg transition-all flex items-center gap-3 ${
-            isSubmitting
-              ? "bg-slate-400 text-white cursor-not-allowed"
-              : "bg-blue-600 hover:bg-blue-700 hover:-translate-y-1"
-          }`}
-        >
-          {isSubmitting ? (
-            "처리 중입니다..."
-          ) : (
-            <>
-              <CheckCircle2 size={24} />
-              클레임 시스템에 등록하기
-            </>
-          )}
-        </button>
       </div>
     </div>
   );
