@@ -1,12 +1,5 @@
-import React, {
-  useState,
-  useRef,
-  ClipboardEvent,
-  DragEvent,
-  useEffect,
-} from "react";
+import React, { useState, useRef, ClipboardEvent, DragEvent } from "react";
 import { supabase } from "../../lib/supabase";
-// 💡 엔터프라이즈 UX를 위한 아이콘 추가
 import {
   CheckCircle2,
   AlertCircle,
@@ -17,7 +10,8 @@ import {
 
 export default function ClaimRegistration() {
   // [1] DB 저장을 위한 상태(State) 관리
-  const [category, setCategory] = useState("검수리포트"); // 💡 기본값 '검수리포트'로 변경
+  const [submitterName, setSubmitterName] = useState(""); // 💡 신규 추가: 접수자 정보
+  const [category, setCategory] = useState("검수리포트");
   const [occurrenceDate, setOccurrenceDate] = useState("");
   const [vehicleName, setVehicleName] = useState("");
   const [vehicleNumber, setVehicleNumber] = useState("");
@@ -42,10 +36,8 @@ export default function ClaimRegistration() {
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // 💡 달력 자동 닫힘을 위한 Ref
   const dateInputRef = useRef<HTMLInputElement>(null);
 
-  // 💡 토스트(Toast) 알림 상태 관리
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
@@ -56,51 +48,46 @@ export default function ClaimRegistration() {
     type: "success" | "error" = "success"
   ) => {
     setToast({ message, type });
-    setTimeout(() => setToast(null), 3000); // 3초 후 자동 사라짐
+    setTimeout(() => setToast(null), 3000);
   };
 
-  // ==========================================
-  // [로직 1] 이미지 첨부 처리
-  // ==========================================
+  // 이미지 처리 로직
   const handleAddImages = (files: FileList | File[]) => {
     const newFiles = Array.from(files).filter((file) =>
       file.type.startsWith("image/")
     );
-
     if (imageFiles.length + newFiles.length > 10) {
       showToast("사진은 최대 10장까지만 첨부할 수 있습니다.", "error");
       return;
     }
-
     const newPreviews = newFiles.map((file) => URL.createObjectURL(file));
     setImageFiles((prev) => [...prev, ...newFiles]);
     setImagePreviews((prev) => [...prev, ...newPreviews]);
   };
-
   const handlePaste = (e: ClipboardEvent<HTMLDivElement>) => {
     if (e.clipboardData.files.length > 0) {
       e.preventDefault();
       handleAddImages(e.clipboardData.files);
     }
   };
-
   const handleDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     if (e.dataTransfer.files.length > 0) handleAddImages(e.dataTransfer.files);
   };
-
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => e.preventDefault();
   const handleRemoveImage = (index: number) => {
     setImageFiles((prev) => prev.filter((_, i) => i !== index));
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // ==========================================
-  // [로직 2] DB 저장 로직 (토스트 적용)
-  // ==========================================
+  // DB 저장 로직
   const handleSubmit = async () => {
-    if (!category || !occurrenceDate || !vehicleNumber) {
-      showToast("구분, 발생일, 차량번호는 필수 입력 항목입니다.", "error");
+    // 💡 필수값 검증에 접수자 추가
+    if (!submitterName || !category || !occurrenceDate || !vehicleNumber) {
+      showToast(
+        "접수자 정보, 구분, 발생일, 차량번호는 필수 입력 항목입니다.",
+        "error"
+      );
       return;
     }
 
@@ -108,7 +95,6 @@ export default function ClaimRegistration() {
 
     try {
       let uploadedImageUrls: string[] = [];
-
       if (imageFiles.length > 0) {
         for (const file of imageFiles) {
           const fileExt = file.name.split(".").pop();
@@ -116,12 +102,10 @@ export default function ClaimRegistration() {
             .toString(36)
             .substring(7)}.${fileExt}`;
           const filePath = `${fileName}`;
-
           const { error: uploadError } = await supabase.storage
             .from("claim_images")
             .upload(filePath, file);
           if (uploadError) throw uploadError;
-
           const { data } = supabase.storage
             .from("claim_images")
             .getPublicUrl(filePath);
@@ -131,6 +115,7 @@ export default function ClaimRegistration() {
 
       const { error: dbError } = await supabase.from("claim_reports").insert([
         {
+          submitter_name: submitterName, // 💡 DB 컬럼 연동
           category,
           occurrence_date: occurrenceDate,
           vehicle_name: vehicleName,
@@ -160,6 +145,7 @@ export default function ClaimRegistration() {
       showToast("성공적으로 클레임이 등록되었습니다!");
 
       // 폼 초기화
+      setSubmitterName("");
       setOccurrenceDate("");
       setVehicleName("");
       setVehicleNumber("");
@@ -185,13 +171,11 @@ export default function ClaimRegistration() {
     }
   };
 
-  // 💡 공통 Input 스타일 (엔터프라이즈 UX 적용)
   const inputClass =
     "w-full h-11 px-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none";
 
   return (
     <div className="relative p-6 max-w-[1400px] mx-auto" onPaste={handlePaste}>
-      {/* 💡 토스트 알림 컴포넌트 */}
       {toast && (
         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] animate-in slide-in-from-top-4 fade-in duration-300">
           <div
@@ -232,7 +216,6 @@ export default function ClaimRegistration() {
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8">
-        {/* ================= 좌측: 폼 영역 (오와 열 완벽 정렬) ================= */}
         <div className="xl:col-span-7 space-y-6">
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
             <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
@@ -243,6 +226,21 @@ export default function ClaimRegistration() {
             </div>
 
             <div className="grid grid-cols-2 gap-x-6 gap-y-5">
+              {/* 💡 최상단 배치: 접수자 정보 */}
+              <div className="col-span-2 bg-blue-50/50 p-4 rounded-xl border border-blue-100 mb-2">
+                <label className="block text-[13px] font-black text-blue-800 mb-1.5">
+                  접수자 정보 (소속 및 이름){" "}
+                  <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={submitterName}
+                  onChange={(e) => setSubmitterName(e.target.value)}
+                  placeholder="예: 거래지원팀 홍길동"
+                  className="w-full h-11 px-4 bg-white border border-blue-200 rounded-xl text-sm text-slate-800 placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all outline-none"
+                />
+              </div>
+
               <div className="col-span-2 sm:col-span-1">
                 <label className="block text-[13px] font-bold text-slate-700 mb-1.5">
                   구분
@@ -268,7 +266,7 @@ export default function ClaimRegistration() {
                   value={occurrenceDate}
                   onChange={(e) => {
                     setOccurrenceDate(e.target.value);
-                    if (dateInputRef.current) dateInputRef.current.blur(); // 💡 선택 즉시 달력 닫힘
+                    if (dateInputRef.current) dateInputRef.current.blur();
                   }}
                   className={inputClass}
                 />
@@ -339,7 +337,6 @@ export default function ClaimRegistration() {
                 />
               </div>
 
-              {/* iOS 스타일 토글 스위치 */}
               <div className="col-span-2 sm:col-span-1 flex flex-col justify-center">
                 <label className="block text-[13px] font-bold text-slate-700 mb-2.5">
                   환불 여부
@@ -400,7 +397,6 @@ export default function ClaimRegistration() {
             </div>
           </div>
 
-          {/* 추가 정보 아코디언 */}
           <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden transition-all">
             <button
               type="button"
@@ -424,7 +420,6 @@ export default function ClaimRegistration() {
                 <ChevronDown size={18} />
               </div>
             </button>
-
             {isAccordionOpen && (
               <div className="p-8 pt-2 border-t border-slate-100 bg-white grid grid-cols-2 gap-x-6 gap-y-5 animate-in slide-in-from-top-4 fade-in duration-300">
                 <div className="col-span-2 sm:col-span-1">
@@ -504,7 +499,6 @@ export default function ClaimRegistration() {
           </div>
         </div>
 
-        {/* ================= 우측: 사진 첨부 영역 ================= */}
         <div className="xl:col-span-5 flex flex-col">
           <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 flex-1 flex flex-col">
             <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100">
@@ -524,7 +518,6 @@ export default function ClaimRegistration() {
                 {imageFiles.length} / 10장
               </span>
             </div>
-
             <div
               onDrop={handleDrop}
               onDragOver={handleDragOver}
@@ -557,7 +550,6 @@ export default function ClaimRegistration() {
                 }
               />
             </div>
-
             {imagePreviews.length > 0 && (
               <div className="mt-6 grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-3 gap-3">
                 {imagePreviews.map((url, index) => (
@@ -586,7 +578,6 @@ export default function ClaimRegistration() {
         </div>
       </div>
 
-      {/* 하단 플로팅 저장 버튼 영역 */}
       <div className="mt-8 flex justify-end">
         <button
           onClick={handleSubmit}

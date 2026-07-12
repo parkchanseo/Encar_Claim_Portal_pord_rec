@@ -764,53 +764,118 @@ export default function ClaimViewer() {
                 </div>
               )}
             </div>
-            <div className="w-[40%] bg-white p-10 overflow-y-auto custom-scrollbar">
-              <div className="mb-6">
-                {getStatusBadge(currentClaim.claim_status)}
-              </div>
-              <h3 className="text-3xl font-black text-slate-800 mb-1">
-                {currentClaim.vehicle_number}
-              </h3>
-              <p className="text-slate-500 font-bold mb-8">
-                {currentClaim.vehicle_name}
-              </p>
-              <div className="space-y-6 border-t border-slate-100 pt-6">
-                <div>
-                  <div className="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2">
-                    발생 위치 & 담당자
+            {/* ==========================================
+                수석 아키텍트 UX 개선: 우측 40% 3단 논리 구조 패널
+                ========================================== */}
+            <div className="w-[40%] bg-white flex flex-col h-full border-l border-slate-100">
+              <div className="p-8 lg:p-10 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+                {/* 상단 헤더: 차량 기본 정보 */}
+                <div className="pb-4 border-b border-slate-100">
+                  <div className="mb-4">
+                    {getStatusBadge(currentClaim.claim_status)}
                   </div>
-                  <div className="text-sm text-slate-800 font-bold">
-                    {currentClaim.region || "-"} / {currentClaim.center || "-"}{" "}
-                    <span className="text-slate-400 font-medium ml-1">
-                      ({currentClaim.manager_name || "-"})
+                  <h3 className="text-3xl font-black text-slate-800 mb-1">
+                    {currentClaim.vehicle_number}
+                  </h3>
+                  <p className="text-slate-500 font-bold mb-4">
+                    {currentClaim.vehicle_name}
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 text-[13px] font-bold text-slate-600">
+                    <span className="px-2.5 py-1.5 bg-slate-100 rounded-lg">
+                      {currentClaim.company_name}
                     </span>
-                  </div>
-                  <div className="text-sm text-slate-800 font-bold mt-1">
-                    {currentClaim.company_name}{" "}
-                    <span className="text-slate-400 font-medium ml-1">
-                      ({currentClaim.dealer_name})
+                    <span className="px-2.5 py-1.5 bg-slate-100 rounded-lg">
+                      {currentClaim.dealer_name} 딜러
                     </span>
+                    {currentClaim.submitter_name && (
+                      <span className="px-2.5 py-1.5 bg-blue-50 text-blue-700 rounded-lg border border-blue-100">
+                        접수: {currentClaim.submitter_name}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <div>
-                  <div className="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2">
-                    클레임 부위 및 보상액
+
+                {/* [섹션 1] 어디서, 얼마나, 누가 (Where & How much) */}
+                <div className="bg-slate-50 rounded-2xl p-5 border border-slate-200 shadow-sm">
+                  <div className="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-4">
+                    핵심 지표 요약
                   </div>
-                  <div className="text-lg font-black text-red-600">
-                    {currentClaim.claim_part || "미지정"}{" "}
-                    <span className="text-sm text-slate-500 font-medium ml-2">
-                      (보상:{" "}
-                      {(currentClaim.compensation_amount || 0).toLocaleString()}
-                      원)
-                    </span>
+                  <div className="grid grid-cols-2 gap-y-5 gap-x-4">
+                    <div>
+                      <p className="text-[12px] font-bold text-slate-500 mb-1">
+                        클레임 부위
+                      </p>
+                      <p className="font-black text-slate-800 text-[15px]">
+                        {currentClaim.claim_part || "미지정"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[12px] font-bold text-slate-500 mb-1">
+                        보상 금액
+                      </p>
+                      <p className="font-black text-red-600 text-[15px]">
+                        {currentClaim.compensation_amount
+                          ? `${currentClaim.compensation_amount.toLocaleString()}원`
+                          : "0원"}
+                      </p>
+                    </div>
+                    <div className="col-span-2 pt-4 border-t border-slate-200">
+                      <p className="text-[12px] font-bold text-slate-500 mb-1.5">
+                        진단광고제작팀 담당자
+                      </p>
+                      <p className="font-bold text-slate-800 text-sm flex items-center gap-2">
+                        {currentClaim.region || "권역 미지정"} /{" "}
+                        {currentClaim.center || "지점 미지정"}
+                        <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md text-xs">
+                          {currentClaim.manager_name
+                            ? `${currentClaim.manager_name} 매니저`
+                            : "미지정"}
+                        </span>
+                      </p>
+                    </div>
                   </div>
                 </div>
-                <div>
-                  <div className="text-[11px] font-black text-slate-400 uppercase tracking-wider mb-2">
-                    상세 경위
+
+                {/* [섹션 2] 왜 발생했는가? (Why) */}
+                <div className="bg-orange-50/50 rounded-2xl p-5 border border-orange-100 shadow-sm">
+                  <div className="flex items-center gap-2 text-[11px] font-black text-orange-600 uppercase tracking-wider mb-3">
+                    <AlertCircle size={14} /> 발생 사유 및 상세 경위
                   </div>
-                  <div className="text-sm text-slate-700 bg-slate-50 p-4 rounded-2xl leading-relaxed border border-slate-100 min-h-[100px]">
-                    {currentClaim.details || "상세 내용이 없습니다."}
+                  <div className="text-sm text-slate-700 leading-relaxed font-medium whitespace-pre-wrap">
+                    {currentClaim.details || "상세 내용이 입력되지 않았습니다."}
+                  </div>
+                </div>
+
+                {/* [섹션 3] 재발 방지 및 개선안 (How) */}
+                <div className="bg-indigo-50/40 rounded-2xl p-5 border border-indigo-100 shadow-sm">
+                  <div className="flex items-center gap-2 text-[11px] font-black text-indigo-600 uppercase tracking-wider mb-4">
+                    <CheckCircle2 size={14} /> 재발 방지 및 시스템 개선안
+                  </div>
+                  <div className="space-y-5">
+                    <div>
+                      <p className="text-[12px] font-bold text-indigo-400 mb-1.5">
+                        재발 방지책
+                      </p>
+                      <p className="text-sm text-slate-700 font-medium whitespace-pre-wrap leading-relaxed">
+                        {currentClaim.preventive_measure || (
+                          <span className="text-slate-400 italic">
+                            아직 등록되지 않았습니다.
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[12px] font-bold text-indigo-400 mb-1.5">
+                        시스템 개선안
+                      </p>
+                      <p className="text-sm text-slate-700 font-medium whitespace-pre-wrap leading-relaxed">
+                        {currentClaim.improvement_plan || (
+                          <span className="text-slate-400 italic">
+                            아직 등록되지 않았습니다.
+                          </span>
+                        )}
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
