@@ -121,12 +121,15 @@ export default function ClaimDashboard({
       currentClaimsCount++;
       currentTotalAmount += amount;
 
-      const isRefundAd = c.category === "검수리포트" && c.is_refunded;
+      // 💡 [핵심 로직 수정] 카테고리/환불여부 대신 '진행 상태'만 봅니다.
+      const isAdModTarget =
+        c.claim_status === "광고 수정 대기" ||
+        c.claim_status === "광고 수정 완료";
 
-      if (isRefundAd) {
+      if (isAdModTarget) {
         totalRequiredMods++;
         if (c.claim_status === "광고 수정 완료") totalCompletedMods++;
-        else actionRequired++;
+        else if (c.claim_status === "광고 수정 대기") actionRequired++;
       }
 
       const region = c.region || "미분류";
@@ -153,7 +156,7 @@ export default function ClaimDashboard({
       regionMap[region].claims += 1;
       regionMap[region].amount += amount;
 
-      if (isRefundAd) {
+      if (isAdModTarget) {
         regionMap[region].required_ad_mods += 1;
         if (c.claim_status === "광고 수정 완료")
           regionMap[region].completed_ad_mods += 1;
@@ -171,7 +174,7 @@ export default function ClaimDashboard({
       regionMap[region].branchMap[center].claims += 1;
       regionMap[region].branchMap[center].amount += amount;
 
-      if (isRefundAd) {
+      if (isAdModTarget) {
         regionMap[region].branchMap[center].required_ad_mods += 1;
         if (c.claim_status === "광고 수정 완료")
           regionMap[region].branchMap[center].completed_ad_mods += 1;
@@ -370,7 +373,7 @@ export default function ClaimDashboard({
               <span className="text-sm font-bold opacity-70 ml-1">건</span>
             </h3>
             <p className="text-[11px] font-bold text-red-500 group-hover:text-red-100">
-              광고 수정 미완료 (클릭하여 처리)
+              광고 수정 대기 (클릭하여 처리)
             </p>
           </div>
         </div>

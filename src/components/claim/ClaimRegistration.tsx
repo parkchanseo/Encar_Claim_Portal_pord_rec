@@ -215,7 +215,8 @@ export default function ClaimRegistration() {
           preventive_measure: preventiveMeasure,
           improvement_plan: improvementPlan,
           image_urls: uploadedImageUrls,
-          claim_status: "광고 수정 대기",
+          // 💡 환불 여부(ON/OFF)에 따라 상태값을 스마트하게 분기!
+          claim_status: isRefunded ? "광고 수정 대기" : "수정 불필요",
         },
       ]);
       if (error) throw error;
