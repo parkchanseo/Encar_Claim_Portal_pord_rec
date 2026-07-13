@@ -16,7 +16,6 @@ import {
   CheckCircle,
   AlertTriangle,
 } from "lucide-react";
-// 💡 파이프라인 임포트 (본진 환경에 맞게 경로 확인 필수)
 import { supabase } from "../../lib/supabase";
 import {
   AreaChart,
@@ -26,7 +25,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Legend,
 } from "recharts";
 
 interface ClaimReport {
@@ -41,7 +39,6 @@ interface ClaimReport {
   manager_name: string;
 }
 
-// 💡 [버그 픽스] user와 navigateToMenu 뒤에 물음표(?)를 붙여서 '없어도 에러 띄우지 마'라고 설정했습니다.
 export default function ClaimDashboard({
   user,
   navigateToMenu,
@@ -348,9 +345,12 @@ export default function ClaimDashboard({
           </div>
         </div>
 
-        {/* 💡 [버그 픽스] navigateToMenu가 존재할 때만 함수를 실행하도록 방어막을 쳤습니다. */}
+        {/* 💡 딥링크(Deep Link) 장착: 누르면 세션스토리지에 흔적을 남기고 뷰어로 이동 */}
         <div
-          onClick={() => navigateToMenu && navigateToMenu("claim-list")}
+          onClick={() => {
+            sessionStorage.setItem("claim_action_required_mode", "true");
+            if (navigateToMenu) navigateToMenu("viewer");
+          }}
           className="bg-red-50 p-5 rounded-3xl shadow-sm border border-red-100 flex flex-col justify-between cursor-pointer hover:bg-red-500 hover:shadow-lg hover:-translate-y-1 transition-all group relative overflow-hidden"
         >
           <div className="absolute -right-4 -bottom-4 text-red-500/10 group-hover:text-black/10 transition-colors">
@@ -469,7 +469,6 @@ export default function ClaimDashboard({
               💰 비용 집중 관리
             </button>
           </div>
-
           <div className="p-5 flex-1 flex flex-col gap-3 overflow-y-auto custom-scrollbar">
             {topCenters.length === 0 ? (
               <p className="text-xs font-bold text-slate-400 text-center py-10">
@@ -577,7 +576,7 @@ export default function ClaimDashboard({
                           <ChevronUp size={14} className="text-blue-500" />
                         ) : (
                           <ChevronDown size={14} className="text-slate-300" />
-                        )}
+                        )}{" "}
                         {region.region}권역
                       </td>
                       <td className="px-6 py-4 text-center font-bold">

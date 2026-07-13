@@ -39,7 +39,8 @@ export default function App() {
   const renderContent = () => {
     switch (activeTab) {
       case "dashboard":
-        return <ClaimDashboard />;
+        // 💡 대시보드에게 화면 전환 권한(navigateToMenu)을 부여했습니다.
+        return <ClaimDashboard navigateToMenu={setActiveTab} />;
       case "registration":
         return <ClaimRegistration />;
       case "viewer":
@@ -54,7 +55,6 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans">
       <header className="bg-white shadow-sm border-b px-8 py-4 flex items-center justify-between sticky top-0 z-50">
-        {/* 💡 로고 및 타이틀 영역: 버튼으로 변경하여 메인(클레임 등록)으로 이동 */}
         <button
           onClick={() => setActiveTab("registration")}
           className="flex items-center gap-3 hover:opacity-80 transition-opacity focus:outline-none"
@@ -102,7 +102,6 @@ export default function App() {
             </button>
           </nav>
 
-          {/* 우측 내 정보 및 로그아웃 버튼 영역 */}
           <div className="flex items-center gap-4 border-l border-slate-200 pl-6">
             <button
               onClick={() => setActiveTab("account")}

@@ -22,6 +22,7 @@ import {
   Save,
   Download,
   UploadCloud,
+  AlertTriangle, // 💡 아이콘 추가
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
@@ -30,7 +31,11 @@ export default function ClaimViewer() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  // 다중 조건 필터 상태
+  // 💡 대시보드에서 넘어온 집중 관리 모드 여부 확인
+  const [isActionRequiredMode, setIsActionRequiredMode] = useState(
+    sessionStorage.getItem("claim_action_required_mode") === "true"
+  );
+
   const [categoryFilter, setCategoryFilter] = useState("전체");
   const [subjectFilter, setSubjectFilter] = useState("전체");
   const [startDate, setStartDate] = useState("");
@@ -40,13 +45,11 @@ export default function ClaimViewer() {
   const [vehicleInfo, setVehicleInfo] = useState("");
   const [claimPartFilter, setClaimPartFilter] = useState("");
 
-  // 정보 수정 모달 상태
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editData, setEditData] = useState<any>(null);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isEditCategoryOpen, setIsEditCategoryOpen] = useState(false);
 
-  // 사진 관리 상태
   const [editExistingImages, setEditExistingImages] = useState<string[]>([]);
   const [editNewImageFiles, setEditNewImageFiles] = useState<File[]>([]);
   const [editNewImagePreviews, setEditNewImagePreviews] = useState<string[]>(
@@ -56,7 +59,6 @@ export default function ClaimViewer() {
   const editDateInputRef = useRef<HTMLInputElement>(null);
   const editTextareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 상세보기(뷰어) 모달 상태
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
@@ -93,7 +95,22 @@ export default function ClaimViewer() {
     fetchClaims();
   }, []);
 
+  // 💡 집중 관리 모드 해제 함수
+  const clearActionRequiredMode = () => {
+    setIsActionRequiredMode(false);
+    sessionStorage.removeItem("claim_action_required_mode");
+  };
+
+  // 💡 필터링 로직 강화 (집중 관리 모드 시 일반 필터 무시)
   const filteredClaims = claims.filter((claim) => {
+    if (isActionRequiredMode) {
+      return (
+        claim.category === "검수리포트" &&
+        claim.is_refunded === true &&
+        claim.claim_status !== "광고 수정 완료"
+      );
+    }
+
     const matchCategory =
       categoryFilter === "전체" || claim.category === categoryFilter;
     const matchStart = startDate ? claim.occurrence_date >= startDate : true;
@@ -178,7 +195,6 @@ export default function ClaimViewer() {
     document.body.removeChild(link);
   };
 
-  // 💡 사진 데이터를 안전하게 배열로 변환하는 마법의 함수 (엑박 방어 로직)
   const getSafeImageUrls = (imageUrlsData: any) => {
     if (!imageUrlsData) return [];
     if (Array.isArray(imageUrlsData)) return imageUrlsData;
@@ -319,7 +335,6 @@ export default function ClaimViewer() {
   };
 
   const currentClaim = filteredClaims[currentIndex];
-  // 💡 모달 창 진입 시 사진 배열 안전하게 가져오기
   const safeCurrentImages = getSafeImageUrls(currentClaim?.image_urls);
 
   const handlePrevPhoto = (e: React.MouseEvent) => {
@@ -418,140 +433,169 @@ export default function ClaimViewer() {
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 mb-8 overflow-hidden transition-all">
-        <button
-          onClick={() => setIsFilterOpen(!isFilterOpen)}
-          className="w-full px-6 py-5 flex justify-between items-center bg-white hover:bg-slate-50 transition-colors focus:outline-none"
-        >
-          <div className="flex items-center gap-2">
-            <Filter size={18} className="text-blue-600" />
-            <h3 className="text-sm font-black text-slate-800 tracking-tight">
-              다중 조건 필터 검색
-            </h3>
-            {!isFilterOpen && (
-              <span className="ml-2 text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                클릭하여 열기
-              </span>
-            )}
-          </div>
-          <div
-            className={`text-slate-400 transition-transform duration-300 ${
-              isFilterOpen ? "rotate-180 text-blue-600" : ""
-            }`}
-          >
-            <ChevronDown size={18} />
-          </div>
-        </button>
-
-        {isFilterOpen && (
-          <div className="p-6 md:p-8 pt-0 border-t border-slate-100 animate-in slide-in-from-top-4 fade-in duration-300 mt-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-5">
-              <div className="xl:col-span-1">
-                <label className={filterLabelClass}>클레임 구분</label>
-                <div className="relative">
-                  <select
-                    value={categoryFilter}
-                    onChange={(e) => setCategoryFilter(e.target.value)}
-                    className={`${inputClass} appearance-none cursor-pointer`}
-                  >
-                    <option value="전체">전체 (All)</option>
-                    <option value="검수리포트">검수리포트</option>
-                    <option value="진단광고">진단광고</option>
-                    <option value="차량결함">차량결함</option>
-                    <option value="서비스">서비스</option>
-                    <option value="기타">기타</option>
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                  />
-                </div>
-              </div>
-
-              <div className="xl:col-span-1">
-                <label className={filterLabelClass}>
-                  보상 주체 (금액 보기)
-                </label>
-                <div className="relative">
-                  <select
-                    value={subjectFilter}
-                    onChange={(e) => setSubjectFilter(e.target.value)}
-                    className={`${inputClass} appearance-none cursor-pointer font-black text-blue-600 bg-blue-50/50 border-blue-200`}
-                  >
-                    <option value="전체">전체 총액 보기</option>
-                    <option value="엔카">엔카 보상액 보기</option>
-                    <option value="딜러">딜러 보상액 보기</option>
-                  </select>
-                  <ChevronDown
-                    size={14}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-blue-400 pointer-events-none"
-                  />
-                </div>
-              </div>
-
-              <div className="xl:col-span-2">
-                <label className={filterLabelClass}>발생일 기간</label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className={inputClass}
-                  />
-                  <span className="text-slate-300 font-bold">-</span>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className={inputClass}
-                  />
-                </div>
-              </div>
-
-              <div className="xl:col-span-1">
-                <label className={filterLabelClass}>담당자 정보</label>
-                <input
-                  type="text"
-                  placeholder="권역 / 지점 / 이름"
-                  value={managerInfo}
-                  onChange={(e) => setManagerInfo(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-              <div className="xl:col-span-1">
-                <label className={filterLabelClass}>딜러 정보</label>
-                <input
-                  type="text"
-                  placeholder="상사명 / 딜러명"
-                  value={dealerInfo}
-                  onChange={(e) => setDealerInfo(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-              <div className="xl:col-span-1">
-                <label className={filterLabelClass}>차량 정보</label>
-                <input
-                  type="text"
-                  placeholder="차종 / 차량번호"
-                  value={vehicleInfo}
-                  onChange={(e) => setVehicleInfo(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
-              <div className="xl:col-span-1">
-                <label className={filterLabelClass}>클레임 부위</label>
-                <input
-                  type="text"
-                  placeholder="예: 휀다"
-                  value={claimPartFilter}
-                  onChange={(e) => setClaimPartFilter(e.target.value)}
-                  className={inputClass}
-                />
-              </div>
+      {/* 💡 집중 관리 모드 배너 */}
+      {isActionRequiredMode && (
+        <div className="bg-red-50 border border-red-200 rounded-3xl p-5 mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animate-in fade-in slide-in-from-top-4 shadow-sm">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center shrink-0">
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <h3 className="text-base font-black text-red-700">
+                🚨 광고 수정 미완료 건 집중 관리 모드
+              </h3>
+              <p className="text-[12px] font-bold text-red-500 mt-0.5">
+                대시보드에서 선택한 미완료 클레임(총 {filteredClaims.length}
+                건)만 표시하고 있습니다.
+              </p>
             </div>
           </div>
-        )}
-      </div>
+          <button
+            onClick={clearActionRequiredMode}
+            className="px-5 py-2.5 bg-white text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-bold text-sm rounded-xl border border-slate-200 shadow-sm transition-colors whitespace-nowrap shrink-0"
+          >
+            전체 보기로 돌아가기
+          </button>
+        </div>
+      )}
+
+      {/* 💡 집중 관리 모드가 아닐 때만 일반 필터 노출 */}
+      {!isActionRequiredMode && (
+        <div className="bg-white rounded-3xl shadow-sm border border-slate-200 mb-8 overflow-hidden transition-all">
+          <button
+            onClick={() => setIsFilterOpen(!isFilterOpen)}
+            className="w-full px-6 py-5 flex justify-between items-center bg-white hover:bg-slate-50 transition-colors focus:outline-none"
+          >
+            <div className="flex items-center gap-2">
+              <Filter size={18} className="text-blue-600" />
+              <h3 className="text-sm font-black text-slate-800 tracking-tight">
+                다중 조건 필터 검색
+              </h3>
+              {!isFilterOpen && (
+                <span className="ml-2 text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
+                  클릭하여 열기
+                </span>
+              )}
+            </div>
+            <div
+              className={`text-slate-400 transition-transform duration-300 ${
+                isFilterOpen ? "rotate-180 text-blue-600" : ""
+              }`}
+            >
+              <ChevronDown size={18} />
+            </div>
+          </button>
+
+          {isFilterOpen && (
+            <div className="p-6 md:p-8 pt-0 border-t border-slate-100 animate-in slide-in-from-top-4 fade-in duration-300 mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-x-6 gap-y-5">
+                <div className="xl:col-span-1">
+                  <label className={filterLabelClass}>클레임 구분</label>
+                  <div className="relative">
+                    <select
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
+                      className={`${inputClass} appearance-none cursor-pointer`}
+                    >
+                      <option value="전체">전체 (All)</option>
+                      <option value="검수리포트">검수리포트</option>
+                      <option value="진단광고">진단광고</option>
+                      <option value="차량결함">차량결함</option>
+                      <option value="서비스">서비스</option>
+                      <option value="기타">기타</option>
+                    </select>
+                    <ChevronDown
+                      size={14}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="xl:col-span-1">
+                  <label className={filterLabelClass}>
+                    보상 주체 (금액 보기)
+                  </label>
+                  <div className="relative">
+                    <select
+                      value={subjectFilter}
+                      onChange={(e) => setSubjectFilter(e.target.value)}
+                      className={`${inputClass} appearance-none cursor-pointer font-black text-blue-600 bg-blue-50/50 border-blue-200`}
+                    >
+                      <option value="전체">전체 총액 보기</option>
+                      <option value="엔카">엔카 보상액 보기</option>
+                      <option value="딜러">딜러 보상액 보기</option>
+                    </select>
+                    <ChevronDown
+                      size={14}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-blue-400 pointer-events-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="xl:col-span-2">
+                  <label className={filterLabelClass}>발생일 기간</label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="date"
+                      value={startDate}
+                      onChange={(e) => setStartDate(e.target.value)}
+                      className={inputClass}
+                    />
+                    <span className="text-slate-300 font-bold">-</span>
+                    <input
+                      type="date"
+                      value={endDate}
+                      onChange={(e) => setEndDate(e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+
+                <div className="xl:col-span-1">
+                  <label className={filterLabelClass}>담당자 정보</label>
+                  <input
+                    type="text"
+                    placeholder="권역 / 지점 / 이름"
+                    value={managerInfo}
+                    onChange={(e) => setManagerInfo(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div className="xl:col-span-1">
+                  <label className={filterLabelClass}>딜러 정보</label>
+                  <input
+                    type="text"
+                    placeholder="상사명 / 딜러명"
+                    value={dealerInfo}
+                    onChange={(e) => setDealerInfo(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div className="xl:col-span-1">
+                  <label className={filterLabelClass}>차량 정보</label>
+                  <input
+                    type="text"
+                    placeholder="차종 / 차량번호"
+                    value={vehicleInfo}
+                    onChange={(e) => setVehicleInfo(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+                <div className="xl:col-span-1">
+                  <label className={filterLabelClass}>클레임 부위</label>
+                  <input
+                    type="text"
+                    placeholder="예: 휀다"
+                    value={claimPartFilter}
+                    onChange={(e) => setClaimPartFilter(e.target.value)}
+                    className={inputClass}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="px-8 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
@@ -1230,10 +1274,8 @@ export default function ClaimViewer() {
         </div>
       )}
 
-      {/* 💡 상세보기(뷰어) 모달 */}
       {isPhotoModalOpen && currentClaim && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 md:p-8 animate-in fade-in duration-200">
-          {/* 💡 이전 클레임 화살표 (위쪽) - Z-index 상향 조치 */}
           <button
             onClick={handlePrevClaim}
             disabled={currentIndex === 0}

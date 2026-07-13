@@ -8,6 +8,9 @@ interface LoginProps {
   onLoginSuccess: () => void;
 }
 
+const ENCAR_LOGO =
+  "https://image.newdaily.co.kr/site/data/img/2021/03/25/2021032500130_0.png?u=20210325144136";
+
 export default function Login({ onLoginSuccess }: LoginProps) {
   const [isSignUp, setIsSignUp] = useState(false);
 
@@ -77,12 +80,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   };
 
   return (
-    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
+    <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4">
       <div className="max-w-md w-full bg-white rounded-3xl shadow-xl p-10 space-y-8 border border-slate-200">
         <div className="text-center space-y-4">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow-lg mx-auto mb-2">
-            EN
-          </div>
+          <img
+            src={ENCAR_LOGO}
+            alt="Encar"
+            className="h-10 mx-auto object-contain"
+          />
 
           <h2 className="text-2xl font-black text-slate-800 tracking-tight">
             엔카 클레임 포털
