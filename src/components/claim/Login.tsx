@@ -1,5 +1,7 @@
 import React, { useState } from "react";
+
 import { AlertTriangle, Loader2, UserPlus, LogIn } from "lucide-react";
+
 import { supabase } from "../../lib/supabase";
 
 interface LoginProps {
@@ -8,24 +10,32 @@ interface LoginProps {
 
 export default function Login({ onLoginSuccess }: LoginProps) {
   const [isSignUp, setIsSignUp] = useState(false);
+
   const [id, setId] = useState("");
+
   const [pw, setPw] = useState("");
+
   const [name, setName] = useState("");
+
   const [team, setTeam] = useState("거래서비스지원팀"); // 기본값
 
   const [error, setError] = useState("");
+
   const [isLoading, setIsLoading] = useState(false);
 
   const handleSubmit = async () => {
     if (!id || !pw) {
       setError("아이디와 비밀번호를 입력해주세요.");
+
       return;
     }
 
     setIsLoading(true);
+
     setError("");
 
     // Supabase는 이메일 형식을 요구하므로 사내 아이디에 가상 도메인 자동 합성
+
     const email = `${id}@encar.com`;
 
     try {
@@ -34,21 +44,29 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
         const { data, error: signUpError } = await supabase.auth.signUp({
           email,
+
           password: pw,
+
           options: {
             data: { name, team }, // 💡 메타데이터에 이름과 소속 영구 저장
           },
         });
+
         if (signUpError) throw signUpError;
+
         alert("계정 생성이 완료되었습니다. 로그인해 주세요!");
+
         setIsSignUp(false);
       } else {
         const { error: signInError } = await supabase.auth.signInWithPassword({
           email,
+
           password: pw,
         });
+
         if (signInError)
           throw new Error("아이디 또는 비밀번호가 일치하지 않습니다.");
+
         onLoginSuccess();
       }
     } catch (err: any) {
@@ -65,9 +83,11 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center text-white font-black text-2xl shadow-lg mx-auto mb-2">
             EN
           </div>
+
           <h2 className="text-2xl font-black text-slate-800 tracking-tight">
             엔카 클레임 포털
           </h2>
+
           <p className="text-slate-500 text-sm font-medium">
             {isSignUp
               ? "사내 계정을 생성해 주십시오"
@@ -89,10 +109,12 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             value={id}
             onChange={(e) => {
               setId(e.target.value);
+
               setError("");
             }}
             onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
           />
+
           <input
             type="password"
             placeholder="비밀번호"
@@ -100,12 +122,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             value={pw}
             onChange={(e) => {
               setPw(e.target.value);
+
               setError("");
             }}
             onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
           />
 
           {/* 회원가입 시에만 나타나는 메타데이터 입력란 */}
+
           {isSignUp && (
             <div className="space-y-4 pt-2 border-t border-slate-100">
               <select
@@ -114,10 +138,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 className="w-full px-5 py-4 bg-slate-50 border border-slate-200 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none text-sm font-medium"
               >
                 <option value="거래서비스지원팀">거래서비스지원팀</option>
+
                 <option value="진단광고제작팀">진단광고제작팀</option>
+
                 <option value="거래서비스그룹">거래서비스그룹</option>
+
                 <option value="B2C사업실">B2C사업실</option>
               </select>
+
               <input
                 type="text"
                 placeholder="이름 (예: 홍길동)"
@@ -148,6 +176,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           <button
             onClick={() => {
               setIsSignUp(!isSignUp);
+
               setError("");
             }}
             className="text-sm font-bold text-slate-500 hover:text-blue-600 transition-colors flex items-center justify-center gap-1 mx-auto"

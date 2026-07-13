@@ -15,10 +15,13 @@ import {
   Save,
   Edit,
   Calendar,
+  FileSpreadsheet, // 💡 엑셀 아이콘 추가
+  Download, // 💡 다운로드 아이콘 추가
 } from "lucide-react";
 
 export default function ClaimRegistration() {
   const [submitterNameForDB, setSubmitterNameForDB] = useState("");
+  // 💡 카테고리 초기값을 설정합니다 (5개 중 택 1)
   const [category, setCategory] = useState("검수리포트");
   const [occurrenceDate, setOccurrenceDate] = useState("");
   const [vehicleName, setVehicleName] = useState("");
@@ -26,8 +29,10 @@ export default function ClaimRegistration() {
   const [companyName, setCompanyName] = useState("");
   const [dealerName, setDealerName] = useState("");
 
-  // 💡 콤마 처리를 위해 raw value와 display value 분리
-  const [compensationAmount, setCompensationAmount] = useState("");
+  // 💡 금액 처리를 위한 상태 분리 (엔카, 딜러)
+  const [encarCompensation, setEncarCompensation] = useState("");
+  const [dealerCompensation, setDealerCompensation] = useState("");
+
   const [isRefunded, setIsRefunded] = useState(false);
   const [returnMileage, setReturnMileage] = useState("");
   const [details, setDetails] = useState("");
@@ -41,12 +46,15 @@ export default function ClaimRegistration() {
 
   const [isCategoryOpen, setIsCategoryOpen] = useState(false);
   const [isAccordionOpen, setIsAccordionOpen] = useState(false);
+  // 💡 엑셀 모달 창을 열고 닫는 스위치
+  const [isExcelModalOpen, setIsExcelModalOpen] = useState(false);
+
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const dateInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null); // 자동 확장을 위한 Ref
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
@@ -86,53 +94,81 @@ export default function ClaimRegistration() {
       ...newFiles.map((f) => URL.createObjectURL(f)),
     ]);
   };
+
   const handleDrop = (e: DragEvent) => {
     e.preventDefault();
     if (e.dataTransfer.files.length) handleAddImages(e.dataTransfer.files);
   };
+
   const handlePaste = (e: ClipboardEvent) => {
-    // 1. 클립보드에 이미지 데이터(스크린샷, 웹 복사 등)가 있는지 먼저 확인
     const items = e.clipboardData.items;
     const files: File[] = [];
-
     for (let i = 0; i < items.length; i++) {
       if (items[i].type.startsWith("image/")) {
         const file = items[i].getAsFile();
         if (file) files.push(file);
       }
     }
-
-    // 2. 만약 이미지 데이터가 있으면 업로드 처리
     if (files.length > 0) {
       e.preventDefault();
       handleAddImages(files);
-    }
-    // 3. 만약 파일 자체가 복사된 경우(기존 기능 유지)
-    else if (e.clipboardData.files.length > 0) {
+    } else if (e.clipboardData.files.length > 0) {
       e.preventDefault();
       handleAddImages(e.clipboardData.files);
     }
   };
+
   const handleRemoveImage = (index: number) => {
     setImageFiles((prev) => prev.filter((_, i) => i !== index));
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // 💡 콤마 자동 생성 핸들러
-  const handleCompensationChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const rawValue = e.target.value.replace(/[^0-9]/g, ""); // 숫자만 추출
-    setCompensationAmount(rawValue);
+  // 💡 숫자만 골라내는 마법의 함수
+  const handleAmountChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+    setter: React.Dispatch<React.SetStateAction<string>>
+  ) => {
+    const rawValue = e.target.value.replace(/[^0-9]/g, "");
+    setter(rawValue);
   };
-  const displayCompensation = compensationAmount
-    ? Number(compensationAmount).toLocaleString()
-    : "";
 
-  // 💡 자동 확장 텍스트 박스 핸들러
+  // 💡 실시간 총액 계산 (엔카 + 딜러)
+  const totalCompensation =
+    (Number(encarCompensation) || 0) + (Number(dealerCompensation) || 0);
+
   const handleDetailsChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     setDetails(e.target.value);
     if (textareaRef.current) {
-      textareaRef.current.style.height = "auto"; // 높이 초기화
-      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`; // 내용물에 맞게 증가
+      textareaRef.current.style.height = "auto";
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  };
+
+  // 💡 엑셀 양식 다운로드 함수
+  const downloadExcelTemplate = () => {
+    // 엑셀 첫 줄에 들어갈 제목들 (작성자, 작성일 제외)
+    const headers =
+      "구분,발생일,차량명,차량번호,상사명,딜러명,엔카보상액,딜러보상액,환불여부,반납주행거리,상세경위\n";
+    // 한글이 깨지지 않게 방어막(\uFEFF)을 쳐줍니다.
+    const blob = new Blob(["\uFEFF" + headers], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "클레임_대량등록_양식.csv";
+    link.click();
+    showToast("엑셀 양식이 다운로드되었습니다.");
+  };
+
+  // 💡 엑셀 업로드 가짜(Mock) 함수 (추후 실제 라이브러리 연동 필요)
+  const handleExcelUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      // 업로드하는 순간 시스템이 현재 시간과 로그인한 사람 정보를 낚아챕니다.
+      console.log("자동 입력될 작성자:", submitterNameForDB);
+      console.log("자동 입력될 업로드 시간:", new Date().toISOString());
+
+      showToast("엑셀 데이터가 성공적으로 업로드되었습니다!");
+      setIsExcelModalOpen(false); // 업로드 성공 시 모달 창 닫기
     }
   };
 
@@ -154,6 +190,8 @@ export default function ClaimRegistration() {
           );
         }
       }
+
+      // 💡 DB에 저장될 때 3개의 금액 방으로 나뉘어 들어갑니다. (Supabase 테이블 수정 필요!)
       const { error } = await supabase.from("claim_reports").insert([
         {
           submitter_name: submitterNameForDB,
@@ -163,9 +201,9 @@ export default function ClaimRegistration() {
           vehicle_number: vehicleNumber,
           company_name: companyName,
           dealer_name: dealerName,
-          compensation_amount: compensationAmount
-            ? Number(compensationAmount)
-            : 0,
+          encar_compensation: Number(encarCompensation) || 0,
+          dealer_compensation: Number(dealerCompensation) || 0,
+          total_compensation: totalCompensation,
           is_refunded: isRefunded,
           return_mileage:
             isRefunded && returnMileage ? Number(returnMileage) : null,
@@ -182,12 +220,15 @@ export default function ClaimRegistration() {
       ]);
       if (error) throw error;
       showToast("성공적으로 클레임이 등록되었습니다!");
+
+      // 등록 완료 후 폼 초기화
       setOccurrenceDate("");
       setVehicleName("");
       setVehicleNumber("");
       setCompanyName("");
       setDealerName("");
-      setCompensationAmount("");
+      setEncarCompensation("");
+      setDealerCompensation("");
       setIsRefunded(false);
       setReturnMileage("");
       setDetails("");
@@ -240,7 +281,7 @@ export default function ClaimRegistration() {
         </div>
       )}
 
-      {/* 💡 [UX] 대시보드와 100% 동일한 패밀리룩 헤더 타이틀 적용 */}
+      {/* 💡 헤더 타이틀 영역 (엑셀 대량 등록 버튼 추가) */}
       <div className="mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-xl font-black text-slate-800 flex items-center gap-2">
@@ -250,23 +291,33 @@ export default function ClaimRegistration() {
             클레임 기본 정보 및 증빙 사진 접수
           </p>
         </div>
-        <button
-          onClick={handleSubmit}
-          disabled={isSubmitting}
-          className={`px-6 py-2 rounded-xl text-sm font-black shadow-md transition-all flex items-center gap-2 ${
-            isSubmitting
-              ? "bg-slate-400 text-white cursor-not-allowed"
-              : "bg-blue-600 text-white hover:bg-blue-700 hover:-translate-y-0.5"
-          }`}
-        >
-          {isSubmitting ? (
-            "처리 중..."
-          ) : (
-            <>
-              <Save size={16} /> 시스템에 등록하기
-            </>
-          )}
-        </button>
+        <div className="flex items-center gap-3">
+          {/* 💡 엑셀 대량 등록 버튼 */}
+          <button
+            onClick={() => setIsExcelModalOpen(true)}
+            className="px-5 py-2 rounded-xl text-sm font-black border-2 border-emerald-500 text-emerald-600 bg-white hover:bg-emerald-50 transition-all flex items-center gap-2"
+          >
+            <FileSpreadsheet size={16} /> 엑셀 대량 등록
+          </button>
+
+          <button
+            onClick={handleSubmit}
+            disabled={isSubmitting}
+            className={`px-6 py-2 rounded-xl text-sm font-black shadow-md transition-all flex items-center gap-2 ${
+              isSubmitting
+                ? "bg-slate-400 text-white cursor-not-allowed"
+                : "bg-blue-600 text-white hover:bg-blue-700 hover:-translate-y-0.5"
+            }`}
+          >
+            {isSubmitting ? (
+              "처리 중..."
+            ) : (
+              <>
+                <Save size={16} /> 시스템에 등록하기
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 relative">
@@ -280,7 +331,7 @@ export default function ClaimRegistration() {
             </div>
 
             <div className="space-y-6">
-              {/* 세트 1: 구분 & 발생일 (커스텀 캘린더) */}
+              {/* 세트 1: 구분 & 발생일 */}
               <div className="grid grid-cols-2 gap-6">
                 <div className="relative">
                   <label className={labelClass}>클레임 구분</label>
@@ -298,7 +349,14 @@ export default function ClaimRegistration() {
                   </div>
                   {isCategoryOpen && (
                     <div className="absolute top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-lg z-10 overflow-hidden animate-in fade-in slide-in-from-top-2">
-                      {["검수리포트", "진단광고", "기타"].map((cat) => (
+                      {/* 💡 카테고리 5개로 확장 */}
+                      {[
+                        "검수리포트",
+                        "진단광고",
+                        "차량결함",
+                        "서비스",
+                        "기타",
+                      ].map((cat) => (
                         <div
                           key={cat}
                           onClick={() => {
@@ -316,7 +374,6 @@ export default function ClaimRegistration() {
                 <div>
                   <label className={labelClass}>발생일</label>
                   <div className="relative">
-                    {/* 💡 기본 달력 아이콘 숨기고 전체 영역 클릭 가능하도록 CSS 트릭 적용 */}
                     <input
                       type="date"
                       ref={dateInputRef}
@@ -383,27 +440,74 @@ export default function ClaimRegistration() {
                 </div>
               </div>
 
-              {/* 💡 위치 이동 밎 콤마 자동화: 보상 금액 */}
-              <div className="pt-2">
-                <label className="block text-[13px] font-black text-red-600 mb-1.5">
+              {/* 💡 보상 금액 3분할 및 자동 합산 로직 적용 */}
+              <div className="pt-2 border-t border-slate-100">
+                <label className="block text-[13px] font-black text-red-600 mb-2">
                   보상금액 (원)
                 </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={displayCompensation}
-                    onChange={handleCompensationChange}
-                    placeholder="0"
-                    className="w-full h-12 pl-4 pr-12 bg-red-50/50 border border-red-200 rounded-xl text-base font-black text-red-700 placeholder:text-red-300 focus:border-red-500 focus:ring-4 focus:ring-red-500/10 transition-all outline-none"
-                  />
-                  <span className="absolute right-4 top-1/2 -translate-y-1/2 font-black text-red-400 text-sm">
-                    원
-                  </span>
+                <div className="grid grid-cols-3 gap-4">
+                  {/* 1. 엔카 보상액 */}
+                  <div className="relative">
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                      엔카 보상액
+                    </label>
+                    <input
+                      type="text"
+                      value={
+                        encarCompensation
+                          ? Number(encarCompensation).toLocaleString()
+                          : ""
+                      }
+                      onChange={(e) =>
+                        handleAmountChange(e, setEncarCompensation)
+                      }
+                      placeholder="0"
+                      className="w-full h-11 pl-4 pr-8 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/10 outline-none transition-all"
+                    />
+                  </div>
+                  {/* 2. 딜러 보상액 */}
+                  <div className="relative">
+                    <label className="block text-[11px] font-bold text-slate-500 mb-1">
+                      딜러 보상액
+                    </label>
+                    <input
+                      type="text"
+                      value={
+                        dealerCompensation
+                          ? Number(dealerCompensation).toLocaleString()
+                          : ""
+                      }
+                      onChange={(e) =>
+                        handleAmountChange(e, setDealerCompensation)
+                      }
+                      placeholder="0"
+                      className="w-full h-11 pl-4 pr-8 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-800 placeholder:text-slate-300 focus:border-red-500 focus:ring-2 focus:ring-red-500/10 outline-none transition-all"
+                    />
+                  </div>
+                  {/* 3. 총 보상액 (자동계산 & 읽기전용) */}
+                  <div className="relative">
+                    <label className="block text-[11px] font-black text-red-500 mb-1">
+                      총 보상액 (자동계산)
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={
+                        totalCompensation > 0
+                          ? totalCompensation.toLocaleString()
+                          : "0"
+                      }
+                      className="w-full h-11 pl-4 pr-8 bg-red-50/50 border border-red-200 rounded-xl text-base font-black text-red-700 outline-none cursor-not-allowed"
+                    />
+                    <span className="absolute right-3 top-[28px] font-black text-red-400 text-xs">
+                      원
+                    </span>
+                  </div>
                 </div>
               </div>
 
-              {/* 💡 세트 4: 환불 여부 토글 & 반납 주행거리 완벽 대칭 */}
-              <div className="grid grid-cols-2 gap-6">
+              {/* 세트 4: 환불 여부 토글 & 반납 주행거리 */}
+              <div className="grid grid-cols-2 gap-6 pt-4 border-t border-slate-100">
                 <div>
                   <label className={labelClass}>환불 여부</label>
                   <div className="h-11 flex items-center px-4 bg-slate-50 border border-slate-200 rounded-xl">
@@ -449,7 +553,7 @@ export default function ClaimRegistration() {
                 </div>
               </div>
 
-              {/* 💡 스마트 폼: 자동 확장 텍스트 박스 */}
+              {/* 스마트 폼: 자동 확장 텍스트 박스 */}
               <div className="pt-2">
                 <label className={labelClass}>상세내용 및 경위</label>
                 <textarea
@@ -464,6 +568,7 @@ export default function ClaimRegistration() {
             </div>
           </div>
 
+          {/* 추가 정보 아코디언 영역 */}
           <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden transition-all">
             <button
               type="button"
@@ -626,6 +731,55 @@ export default function ClaimRegistration() {
           </div>
         </div>
       </div>
+
+      {/* 💡 엑셀 대량 등록 팝업 (모달창) */}
+      {isExcelModalOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-8 animate-in zoom-in-95 duration-200">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                <FileSpreadsheet size={20} className="text-emerald-500" />
+                엑셀 대량 등록
+              </h3>
+              <button
+                onClick={() => setIsExcelModalOpen(false)}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X size={24} />
+              </button>
+            </div>
+
+            <p className="text-sm font-bold text-slate-500 mb-6 leading-relaxed">
+              작성자와 날짜는 로그인 정보 기준으로{" "}
+              <span className="text-blue-600">자동 등록</span>됩니다. 반드시
+              지정된 양식을 다운로드하여 작성해 주세요.
+            </p>
+
+            <div className="flex flex-col gap-4">
+              <button
+                onClick={downloadExcelTemplate}
+                className="w-full py-4 rounded-xl border border-slate-200 bg-slate-50 hover:bg-slate-100 text-slate-700 font-black text-sm flex items-center justify-center gap-2 transition-colors"
+              >
+                <Download size={18} />
+                엑셀 양식 다운로드
+              </button>
+
+              <div className="relative w-full">
+                <input
+                  type="file"
+                  accept=".csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel"
+                  onChange={handleExcelUpload}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                />
+                <div className="w-full py-4 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-black text-sm flex items-center justify-center gap-2 transition-colors">
+                  <UploadCloud size={18} />
+                  작성된 엑셀 파일 업로드
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
