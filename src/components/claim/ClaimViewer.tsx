@@ -31,7 +31,6 @@ export default function ClaimViewer() {
   const [isLoading, setIsLoading] = useState(true);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
 
-  // 💡 대시보드에서 넘어온 집중 관리 모드 여부 확인
   const [isActionRequiredMode, setIsActionRequiredMode] = useState(
     sessionStorage.getItem("claim_action_required_mode") === "true"
   );
@@ -62,6 +61,10 @@ export default function ClaimViewer() {
   const [isPhotoModalOpen, setIsPhotoModalOpen] = useState(false);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
+
+  // 💡 [스와이프 기능] 터치 시작 좌표를 저장할 상태
+  const [touchStartX, setTouchStartX] = useState<number | null>(null);
+
   const [toast, setToast] = useState<{
     message: string;
     type: "success" | "error";
@@ -335,16 +338,17 @@ export default function ClaimViewer() {
   const currentClaim = filteredClaims[currentIndex];
   const safeCurrentImages = getSafeImageUrls(currentClaim?.image_urls);
 
-  const handlePrevPhoto = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handlePrevPhoto = (e?: React.MouseEvent | React.TouchEvent) => {
+    e?.stopPropagation();
     setCurrentPhotoIndex((prev) => Math.max(0, prev - 1));
   };
-  const handleNextPhoto = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleNextPhoto = (e?: React.MouseEvent | React.TouchEvent) => {
+    e?.stopPropagation();
     setCurrentPhotoIndex((prev) =>
       Math.min(safeCurrentImages.length - 1, prev + 1)
     );
   };
+
   const handlePrevClaim = (e?: React.MouseEvent) => {
     e?.stopPropagation();
     if (currentIndex > 0) {
@@ -358,6 +362,39 @@ export default function ClaimViewer() {
       setCurrentIndex((prev) => prev + 1);
       setCurrentPhotoIndex(0);
     }
+  };
+
+  // 💡 [추가] 모바일 스와이프 및 PC 마우스 드래그 핸들러
+  const handleTouchStart = (e: React.TouchEvent | React.MouseEvent) => {
+    if ("touches" in e) {
+      setTouchStartX(e.touches[0].clientX);
+    } else {
+      setTouchStartX((e as React.MouseEvent).clientX);
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent | React.MouseEvent) => {
+    if (touchStartX === null) return;
+
+    let touchEndX;
+    if ("changedTouches" in e) {
+      touchEndX = e.changedTouches[0].clientX;
+    } else {
+      touchEndX = (e as React.MouseEvent).clientX;
+    }
+
+    const distance = touchStartX - touchEndX;
+    const minSwipeDistance = 50;
+
+    if (
+      distance > minSwipeDistance &&
+      currentPhotoIndex < safeCurrentImages.length - 1
+    ) {
+      handleNextPhoto();
+    } else if (distance < -minSwipeDistance && currentPhotoIndex > 0) {
+      handlePrevPhoto();
+    }
+    setTouchStartX(null);
   };
 
   const getStatusBadge = (status: string) => {
@@ -431,7 +468,6 @@ export default function ClaimViewer() {
         </div>
       </div>
 
-      {/* 집중 관리 모드 배너 */}
       {isActionRequiredMode && (
         <div className="bg-red-50 border border-red-200 rounded-3xl p-5 mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animate-in fade-in slide-in-from-top-4 shadow-sm">
           <div className="flex items-center gap-3">
@@ -457,7 +493,6 @@ export default function ClaimViewer() {
         </div>
       )}
 
-      {/* 필터 영역 */}
       {!isActionRequiredMode && (
         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 mb-8 overflow-hidden transition-all">
           <button
@@ -595,7 +630,6 @@ export default function ClaimViewer() {
         </div>
       )}
 
-      {/* 리스트 영역 */}
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="px-5 md:px-8 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <h3 className="text-base font-black text-slate-800">접수 목록</h3>
@@ -612,7 +646,7 @@ export default function ClaimViewer() {
           </div>
         </div>
 
-        {/* 💻 PC 버전을 위한 기존 테이블 (모바일에서는 숨김) */}
+        {/* 💻 PC 버전을 위한 기존 테이블 */}
         <div className="hidden md:block overflow-x-auto custom-scrollbar">
           <table className="w-full text-left border-collapse min-w-[900px]">
             <thead>
@@ -751,7 +785,7 @@ export default function ClaimViewer() {
           </table>
         </div>
 
-        {/* 📱 모바일 버전을 위한 카드형 리스트 (PC에서는 숨김) */}
+        {/* 📱 모바일 버전을 위한 카드형 리스트 */}
         <div className="block md:hidden flex-col divide-y divide-slate-100">
           {isLoading ? (
             <div className="p-10 text-center text-slate-400 font-bold text-sm">
@@ -832,7 +866,7 @@ export default function ClaimViewer() {
         </div>
       </div>
 
-      {/* 수정 모달 (그리드 반응형 처리 됨) */}
+      {/* 정보 수정 모달 */}
       {isEditModalOpen && editData && (
         <div
           className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 sm:p-6"
@@ -873,7 +907,6 @@ export default function ClaimViewer() {
                       </span>
                     </h4>
                   </div>
-                  {/* 💡 그리드를 모바일에서는 1칸으로 변경 */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div className="relative">
                       <label className={labelClass}>구분</label>
@@ -1357,9 +1390,10 @@ export default function ClaimViewer() {
         </div>
       )}
 
-      {/* 사진 열람 모달 (모바일 버튼 위치 상향) */}
+      {/* 사진 열람 모달 */}
       {isPhotoModalOpen && currentClaim && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 md:p-8 animate-in fade-in duration-200">
+          {/* 이전 글로 이동 (위 화살표) */}
           <button
             onClick={handlePrevClaim}
             disabled={currentIndex === 0}
@@ -1382,13 +1416,22 @@ export default function ClaimViewer() {
             </button>
 
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-              <div className="lg:w-[60%] h-[50vh] lg:h-full bg-slate-900 relative flex items-center justify-center group">
+              {/* 💡 [스와이프 이벤트 등록] 모바일 터치 및 PC 마우스 드래그를 감지합니다 */}
+              <div
+                className="lg:w-[60%] h-[50vh] lg:h-full bg-slate-900 relative flex items-center justify-center group select-none"
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+                onMouseDown={handleTouchStart}
+                onMouseUp={handleTouchEnd}
+                onMouseLeave={() => setTouchStartX(null)} // 드래그 중 이탈 시 에러 방지
+              >
                 {safeCurrentImages && safeCurrentImages.length > 0 ? (
                   <>
                     <img
                       src={safeCurrentImages[currentPhotoIndex]}
                       alt="증빙"
-                      className="max-w-full max-h-full object-contain"
+                      className="max-w-full max-h-full object-contain cursor-grab active:cursor-grabbing"
+                      draggable={false} // 브라우저 자체 이미지 드래그 방해 요소 제거
                     />
 
                     {safeCurrentImages.length > 1 && (
@@ -1558,10 +1601,11 @@ export default function ClaimViewer() {
             </div>
           </div>
 
+          {/* 💡 [버튼 복구 및 위치 조정] 스마트폰 하단 터치 영역 확보를 위해 bottom-12로 올림 */}
           <button
             onClick={handleNextClaim}
             disabled={currentIndex === filteredClaims.length - 1}
-            className={`absolute bottom-8 sm:bottom-6 left-1/2 -translate-x-1/2 p-3 bg-white/20 backdrop-blur-md rounded-full flex flex-col items-center transition-all z-[150] ${
+            className={`absolute bottom-12 sm:bottom-6 left-1/2 -translate-x-1/2 p-3 bg-white/20 backdrop-blur-md rounded-full flex flex-col items-center transition-all z-[150] ${
               currentIndex === filteredClaims.length - 1
                 ? "opacity-0 pointer-events-none"
                 : "text-white hover:bg-white/40 hover:translate-y-2"
