@@ -22,7 +22,7 @@ import {
   Save,
   Download,
   UploadCloud,
-  AlertTriangle, // 💡 아이콘 추가
+  AlertTriangle,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
 
@@ -95,13 +95,11 @@ export default function ClaimViewer() {
     fetchClaims();
   }, []);
 
-  // 💡 집중 관리 모드 해제 함수
   const clearActionRequiredMode = () => {
     setIsActionRequiredMode(false);
     sessionStorage.removeItem("claim_action_required_mode");
   };
 
-  // 💡 필터링 로직 강화 (집중 관리 모드 시 일반 필터 무시)
   const filteredClaims = claims.filter((claim) => {
     if (isActionRequiredMode) {
       return (
@@ -433,7 +431,7 @@ export default function ClaimViewer() {
         </div>
       </div>
 
-      {/* 💡 집중 관리 모드 배너 */}
+      {/* 집중 관리 모드 배너 */}
       {isActionRequiredMode && (
         <div className="bg-red-50 border border-red-200 rounded-3xl p-5 mb-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 animate-in fade-in slide-in-from-top-4 shadow-sm">
           <div className="flex items-center gap-3">
@@ -459,7 +457,7 @@ export default function ClaimViewer() {
         </div>
       )}
 
-      {/* 💡 집중 관리 모드가 아닐 때만 일반 필터 노출 */}
+      {/* 필터 영역 */}
       {!isActionRequiredMode && (
         <div className="bg-white rounded-3xl shadow-sm border border-slate-200 mb-8 overflow-hidden transition-all">
           <button
@@ -597,8 +595,9 @@ export default function ClaimViewer() {
         </div>
       )}
 
+      {/* 리스트 영역 */}
       <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
-        <div className="px-8 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+        <div className="px-5 md:px-8 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
           <h3 className="text-base font-black text-slate-800">접수 목록</h3>
           <div className="flex items-center gap-3">
             <span className="text-sm font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full border border-blue-100 shadow-sm">
@@ -612,8 +611,10 @@ export default function ClaimViewer() {
             </button>
           </div>
         </div>
-        <div className="overflow-x-auto custom-scrollbar">
-          <table className="w-full text-left border-collapse">
+
+        {/* 💻 PC 버전을 위한 기존 테이블 (모바일에서는 숨김) */}
+        <div className="hidden md:block overflow-x-auto custom-scrollbar">
+          <table className="w-full text-left border-collapse min-w-[900px]">
             <thead>
               <tr className="bg-white border-b border-slate-200">
                 <th className="px-8 py-4 text-[13px] font-black text-slate-500 tracking-wider">
@@ -749,21 +750,102 @@ export default function ClaimViewer() {
             </tbody>
           </table>
         </div>
+
+        {/* 📱 모바일 버전을 위한 카드형 리스트 (PC에서는 숨김) */}
+        <div className="block md:hidden flex-col divide-y divide-slate-100">
+          {isLoading ? (
+            <div className="p-10 text-center text-slate-400 font-bold text-sm">
+              데이터를 불러오는 중입니다...
+            </div>
+          ) : filteredClaims.length === 0 ? (
+            <div className="p-10 text-center text-slate-400 font-bold text-sm">
+              조건에 맞는 내역이 없습니다.
+            </div>
+          ) : (
+            filteredClaims.map((claim, index) => {
+              let displayAmt = claim.total_compensation || 0;
+              let amtLabel = "총액";
+              if (subjectFilter === "엔카") {
+                displayAmt = claim.encar_compensation || 0;
+                amtLabel = "엔카";
+              } else if (subjectFilter === "딜러") {
+                displayAmt = claim.dealer_compensation || 0;
+                amtLabel = "딜러";
+              }
+
+              return (
+                <div
+                  key={claim.id}
+                  onClick={() => openPhotoModal(index)}
+                  className="p-5 bg-white hover:bg-slate-50 transition-colors cursor-pointer relative"
+                >
+                  <button
+                    onClick={(e) => openEditModal(claim, e)}
+                    className="absolute top-5 right-5 p-2 text-slate-400 bg-slate-100 rounded-lg hover:bg-blue-600 hover:text-white transition-all shadow-sm"
+                    title="정보 수정"
+                  >
+                    <Edit size={14} />
+                  </button>
+                  <div className="flex justify-between items-start mb-3 pr-10">
+                    {getStatusBadge(claim.claim_status)}
+                  </div>
+
+                  <div className="mb-3">
+                    <div className="text-[15px] font-black text-slate-800 flex items-center gap-2 mb-1">
+                      {claim.vehicle_number}
+                      <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">
+                        {claim.category}
+                      </span>
+                    </div>
+                    <div className="text-[12px] font-bold text-slate-500 mt-1">
+                      {claim.company_name} | {claim.dealer_name} 딜러
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between items-end pt-3 border-t border-slate-50 mt-3">
+                    <div>
+                      <div className="text-[12px] font-black text-slate-700">
+                        {claim.manager_name
+                          ? `${claim.manager_name} 매니저`
+                          : "담당자 미지정"}
+                      </div>
+                      <div className="text-[11px] text-slate-400 font-medium mt-0.5">
+                        {claim.region} {claim.center && `/ ${claim.center}`}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-[11px] font-bold text-slate-500 mb-1">
+                        {claim.claim_part || "부위 미지정"}
+                      </div>
+                      <div className="text-[14px] font-black text-red-600 flex items-center justify-end gap-1">
+                        <span className="text-[9px] bg-red-50 text-red-500 px-1.5 py-0.5 rounded leading-none">
+                          {amtLabel}
+                        </span>
+                        {displayAmt.toLocaleString()}원
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
       </div>
 
+      {/* 수정 모달 (그리드 반응형 처리 됨) */}
       {isEditModalOpen && editData && (
         <div
           className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 sm:p-6"
           onPaste={handleEditPaste}
         >
           <div className="bg-white rounded-[2rem] w-full max-w-[1400px] h-[90vh] flex flex-col shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="p-6 sm:px-8 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
+            <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-white shrink-0">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
                   <Edit size={20} />
                 </div>
                 <div>
-                  <h3 className="text-xl font-black text-slate-800">
+                  <h3 className="text-lg sm:text-xl font-black text-slate-800">
                     클레임 상세 정보 수정
                   </h3>
                   <p className="text-xs font-bold text-slate-500 mt-0.5">
@@ -779,9 +861,9 @@ export default function ClaimViewer() {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 sm:p-8 bg-slate-50/50 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto p-4 sm:p-8 bg-slate-50/50 custom-scrollbar">
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6 h-full">
+                <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6 h-full">
                   <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
                     <div className="w-1.5 h-5 bg-blue-600 rounded-full"></div>
                     <h4 className="text-lg font-black text-slate-800">
@@ -791,7 +873,8 @@ export default function ClaimViewer() {
                       </span>
                     </h4>
                   </div>
-                  <div className="grid grid-cols-2 gap-6">
+                  {/* 💡 그리드를 모바일에서는 1칸으로 변경 */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div className="relative">
                       <label className={labelClass}>구분</label>
                       <div
@@ -851,7 +934,7 @@ export default function ClaimViewer() {
                       </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div>
                       <label className={labelClass}>차량명</label>
                       <input
@@ -875,7 +958,7 @@ export default function ClaimViewer() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div>
                       <label className={labelClass}>상사명</label>
                       <input
@@ -903,7 +986,7 @@ export default function ClaimViewer() {
                     <label className="block text-[13px] font-black text-red-600 mb-2">
                       보상금액 (원)
                     </label>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
                         <label className="block text-[11px] font-bold text-slate-500 mb-1">
                           엔카 보상액
@@ -964,7 +1047,7 @@ export default function ClaimViewer() {
                       </div>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-6 pt-2 border-t border-slate-100">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2 border-t border-slate-100">
                     <div>
                       <label className={labelClass}>환불 여부</label>
                       <div className="h-11 flex items-center px-4 bg-slate-50 border border-slate-200 rounded-xl">
@@ -1034,7 +1117,7 @@ export default function ClaimViewer() {
                   </div>
                 </div>
 
-                <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6 h-full">
+                <div className="bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200 space-y-6 h-full">
                   <div className="flex items-center gap-3 pb-4 border-b border-slate-100">
                     <div className="w-1.5 h-5 bg-purple-500 rounded-full"></div>
                     <h4 className="text-lg font-black text-slate-800">
@@ -1060,7 +1143,7 @@ export default function ClaimViewer() {
                       <option value="광고 수정 완료">🟢 광고 수정 완료</option>
                     </select>
                   </div>
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div>
                       <label className={labelClass}>권역</label>
                       <input
@@ -1086,7 +1169,7 @@ export default function ClaimViewer() {
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 gap-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div>
                       <label className={labelClass}>담당자</label>
                       <input
@@ -1136,7 +1219,7 @@ export default function ClaimViewer() {
                   </div>
                 </div>
 
-                <div className="col-span-1 lg:col-span-2 bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
+                <div className="col-span-1 lg:col-span-2 bg-white p-6 sm:p-8 rounded-3xl shadow-sm border border-slate-200">
                   <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100">
                     <div className="flex items-center gap-3">
                       <div className="w-1.5 h-5 bg-emerald-500 rounded-full"></div>
@@ -1244,18 +1327,18 @@ export default function ClaimViewer() {
               </div>
             </div>
 
-            <div className="p-6 border-t border-slate-100 bg-white flex justify-end gap-3 shrink-0">
+            <div className="p-4 sm:p-6 border-t border-slate-100 bg-white flex justify-end gap-3 shrink-0">
               <button
                 onClick={() => setIsEditModalOpen(false)}
                 disabled={isUpdating}
-                className="px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors"
+                className="px-6 sm:px-8 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors"
               >
                 취소
               </button>
               <button
                 onClick={handleUpdate}
                 disabled={isUpdating}
-                className={`px-10 py-3 text-white rounded-xl font-bold shadow-md transition-all flex items-center gap-2 ${
+                className={`px-6 sm:px-10 py-3 text-white rounded-xl font-bold shadow-md transition-all flex items-center gap-2 ${
                   isUpdating
                     ? "bg-slate-400 cursor-not-allowed"
                     : "bg-blue-600 hover:bg-blue-700 hover:-translate-y-0.5"
@@ -1274,6 +1357,7 @@ export default function ClaimViewer() {
         </div>
       )}
 
+      {/* 사진 열람 모달 (모바일 버튼 위치 상향) */}
       {isPhotoModalOpen && currentClaim && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 md:p-8 animate-in fade-in duration-200">
           <button
@@ -1477,7 +1561,7 @@ export default function ClaimViewer() {
           <button
             onClick={handleNextClaim}
             disabled={currentIndex === filteredClaims.length - 1}
-            className={`absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 p-3 bg-white/20 backdrop-blur-md rounded-full flex flex-col items-center transition-all z-[150] ${
+            className={`absolute bottom-8 sm:bottom-6 left-1/2 -translate-x-1/2 p-3 bg-white/20 backdrop-blur-md rounded-full flex flex-col items-center transition-all z-[150] ${
               currentIndex === filteredClaims.length - 1
                 ? "opacity-0 pointer-events-none"
                 : "text-white hover:bg-white/40 hover:translate-y-2"
