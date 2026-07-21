@@ -1179,15 +1179,24 @@ export default function ClaimViewer() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                     <div>
                       <label className={labelClass}>권역</label>
-                      <input
-                        type="text"
-                        value={editData.region || ""}
-                        onChange={(e) =>
-                          handleEditChange("region", e.target.value)
-                        }
-                        className={inputClass}
-                        placeholder="예: 서울"
-                      />
+                      <div className="relative">
+                        <select
+                          value={editData.region || ""}
+                          onChange={(e) =>
+                            handleEditChange("region", e.target.value)
+                          }
+                          className={`${inputClass} appearance-none cursor-pointer`}
+                        >
+                          <option value="" disabled>권역 선택</option>
+                          {["경인", "경기1", "경기2", "경기3", "대구", "부산", "서울", "전라", "충청"].map((r) => (
+                            <option key={r} value={r}>{r}</option>
+                          ))}
+                        </select>
+                        <ChevronDown
+                          size={16}
+                          className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                        />
+                      </div>
                     </div>
                     <div>
                       <label className={labelClass}>센터(지점)</label>
@@ -1390,56 +1399,71 @@ export default function ClaimViewer() {
         </div>
       )}
 
-      {/* 사진 열람 모달 */}
+{/* 사진 열람 모달 */}
       {isPhotoModalOpen && currentClaim && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center bg-black/85 backdrop-blur-sm p-4 md:p-8 animate-in fade-in duration-200">
-          {/* 이전 글로 이동 (위 화살표) */}
+          {/* 💡 [UX 개선] 이전 글로 이동 (위 화살표): 터치 패딩(p-5) 확대 및 층계(z-index) 최상단 고정 */}
           <button
             onClick={handlePrevClaim}
             disabled={currentIndex === 0}
-            className={`absolute top-4 sm:top-6 left-1/2 -translate-x-1/2 p-3 bg-white/20 backdrop-blur-md rounded-full flex flex-col items-center transition-all z-[150] ${
+            className={`absolute top-4 sm:top-6 left-1/2 -translate-x-1/2 p-5 bg-white/30 backdrop-blur-md rounded-full flex flex-col items-center transition-all z-[160] ${
               currentIndex === 0
                 ? "opacity-0 pointer-events-none"
-                : "text-white hover:bg-white/40 hover:-translate-y-2"
+                : "text-white hover:bg-white/50 hover:-translate-y-2 shadow-lg"
             }`}
             title="이전 글로 이동"
           >
-            <ChevronUp size={28} />
+            <ChevronUp size={32} />
           </button>
 
           <div className="bg-white w-full max-w-[1400px] h-[90vh] rounded-3xl shadow-2xl overflow-hidden flex flex-col relative mt-6 mb-6">
             <button
               onClick={() => setIsPhotoModalOpen(false)}
-              className="absolute top-6 right-6 z-[120] p-2 bg-slate-100/50 hover:bg-red-50 hover:text-red-600 backdrop-blur-md rounded-full transition-colors"
+              className="absolute top-6 right-6 z-[120] p-3 bg-slate-100/80 hover:bg-red-50 hover:text-red-600 backdrop-blur-md rounded-full transition-colors"
             >
               <X size={24} />
             </button>
 
             <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-              {/* 💡 [스와이프 이벤트 등록] 모바일 터치 및 PC 마우스 드래그를 감지합니다 */}
+              {/* 💡 [UX 개선] 슬라이딩을 위한 구조 변경 (overflow-hidden 컨테이너) */}
               <div
-                className="lg:w-[60%] h-[50vh] lg:h-full bg-slate-900 relative flex items-center justify-center group select-none"
+                className="lg:w-[60%] h-[50vh] lg:h-full bg-slate-900 relative group select-none overflow-hidden"
                 onTouchStart={handleTouchStart}
                 onTouchEnd={handleTouchEnd}
                 onMouseDown={handleTouchStart}
                 onMouseUp={handleTouchEnd}
-                onMouseLeave={() => setTouchStartX(null)} // 드래그 중 이탈 시 에러 방지
+                onMouseLeave={() => setTouchStartX(null)}
               >
                 {safeCurrentImages && safeCurrentImages.length > 0 ? (
                   <>
-                    <img
-                      src={safeCurrentImages[currentPhotoIndex]}
-                      alt="증빙"
-                      className="max-w-full max-h-full object-contain cursor-grab active:cursor-grabbing"
-                      draggable={false} // 브라우저 자체 이미지 드래그 방해 요소 제거
-                    />
+                    {/* 💡 [UX 개선] 사진들을 가로로 길게 이어붙이고 transform으로 스무스하게 이동 */}
+                    <div
+                      className="flex w-full h-full transition-transform duration-500 ease-out"
+                      style={{
+                        transform: `translateX(-${currentPhotoIndex * 100}%)`,
+                      }}
+                    >
+                      {safeCurrentImages.map((img: string, idx: number) => (
+                        <div
+                          key={idx}
+                          className="w-full h-full flex-shrink-0 flex items-center justify-center"
+                        >
+                          <img
+                            src={img}
+                            alt={`증빙-${idx}`}
+                            className="max-w-full max-h-full object-contain cursor-grab active:cursor-grabbing"
+                            draggable={false}
+                          />
+                        </div>
+                      ))}
+                    </div>
 
                     {safeCurrentImages.length > 1 && (
                       <>
                         <button
                           onClick={handlePrevPhoto}
                           disabled={currentPhotoIndex === 0}
-                          className="absolute left-6 p-4 bg-black/40 hover:bg-black/70 text-white rounded-full backdrop-blur-md disabled:opacity-0 transition-all opacity-0 group-hover:opacity-100"
+                          className="absolute left-6 top-1/2 -translate-y-1/2 p-4 bg-black/40 hover:bg-black/70 text-white rounded-full backdrop-blur-md disabled:opacity-0 transition-all opacity-0 group-hover:opacity-100 z-10"
                         >
                           <ChevronLeft size={32} />
                         </button>
@@ -1448,18 +1472,18 @@ export default function ClaimViewer() {
                           disabled={
                             currentPhotoIndex === safeCurrentImages.length - 1
                           }
-                          className="absolute right-6 p-4 bg-black/40 hover:bg-black/70 text-white rounded-full backdrop-blur-md disabled:opacity-0 transition-all opacity-0 group-hover:opacity-100"
+                          className="absolute right-6 top-1/2 -translate-y-1/2 p-4 bg-black/40 hover:bg-black/70 text-white rounded-full backdrop-blur-md disabled:opacity-0 transition-all opacity-0 group-hover:opacity-100 z-10"
                         >
                           <ChevronRight size={32} />
                         </button>
-                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-5 py-2 bg-black/60 text-white text-sm font-bold rounded-full backdrop-blur-md">
+                        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 px-5 py-2 bg-black/60 text-white text-sm font-bold rounded-full backdrop-blur-md z-10">
                           {currentPhotoIndex + 1} / {safeCurrentImages.length}
                         </div>
                       </>
                     )}
                   </>
                 ) : (
-                  <div className="text-slate-500 font-bold text-lg flex flex-col items-center gap-4">
+                  <div className="text-slate-500 font-bold text-lg flex flex-col items-center justify-center w-full h-full gap-4">
                     <ImageIcon size={48} className="opacity-30" /> 사진 없음
                   </div>
                 )}
@@ -1601,18 +1625,18 @@ export default function ClaimViewer() {
             </div>
           </div>
 
-          {/* 💡 [버튼 복구 및 위치 조정] 스마트폰 하단 터치 영역 확보를 위해 bottom-12로 올림 */}
+          {/* 💡 [UX 개선] 다음 글로 이동 (아래 화살표): 터치 패딩(p-5) 확대 및 층계(z-index) 최상단 고정 */}
           <button
             onClick={handleNextClaim}
             disabled={currentIndex === filteredClaims.length - 1}
-            className={`absolute bottom-12 sm:bottom-6 left-1/2 -translate-x-1/2 p-3 bg-white/20 backdrop-blur-md rounded-full flex flex-col items-center transition-all z-[150] ${
+            className={`absolute bottom-6 sm:bottom-6 left-1/2 -translate-x-1/2 p-5 bg-white/30 backdrop-blur-md rounded-full flex flex-col items-center transition-all z-[160] ${
               currentIndex === filteredClaims.length - 1
                 ? "opacity-0 pointer-events-none"
-                : "text-white hover:bg-white/40 hover:translate-y-2"
+                : "text-white hover:bg-white/50 hover:translate-y-2 shadow-lg"
             }`}
             title="다음 글로 이동"
           >
-            <ChevronDown size={28} />
+            <ChevronDown size={32} />
           </button>
         </div>
       )}

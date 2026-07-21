@@ -31,7 +31,7 @@ interface ClaimReport {
   id: string;
   category: string;
   occurrence_date: string;
-  compensation_amount: number;
+  total_compensation: number; // 💡 대시보드가 읽어들일 진짜 '총 보상액' 컬럼명으로 교체
   is_refunded: boolean;
   claim_status: string;
   region: string;
@@ -94,8 +94,9 @@ export default function ClaimDashboard({
       const claimDate = new Date(c.occurrence_date);
       if (claimDate.getFullYear() === currentYear) {
         monthlyMap[claimDate.getMonth()].claims += 1;
+        // 💡 [수정됨] compensation_amount -> total_compensation
         monthlyMap[claimDate.getMonth()].amount +=
-          Number(c.compensation_amount) || 0;
+          Number(c.total_compensation) || 0; 
       }
     });
 
@@ -117,11 +118,11 @@ export default function ClaimDashboard({
     const regionMap: Record<string, any> = {};
 
     filteredClaims.forEach((c) => {
-      const amount = Number(c.compensation_amount) || 0;
+      // 💡 [수정됨] compensation_amount -> total_compensation
+      const amount = Number(c.total_compensation) || 0; 
       currentClaimsCount++;
       currentTotalAmount += amount;
 
-      // 💡 [핵심 로직 수정] 카테고리/환불여부 대신 '진행 상태'만 봅니다.
       const isAdModTarget =
         c.claim_status === "광고 수정 대기" ||
         c.claim_status === "광고 수정 완료";

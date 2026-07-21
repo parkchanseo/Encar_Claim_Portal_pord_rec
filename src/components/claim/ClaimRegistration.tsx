@@ -597,13 +597,22 @@ export default function ClaimRegistration() {
               <div className="p-8 pt-0 grid grid-cols-2 gap-6 animate-in slide-in-from-top-4 fade-in duration-300 border-t border-slate-100 mt-4">
                 <div className="col-span-2 sm:col-span-1">
                   <label className={labelClass}>권역</label>
-                  <input
-                    type="text"
-                    value={region}
-                    onChange={(e) => setRegion(e.target.value)}
-                    className={inputClass}
-                    placeholder="예: 서울"
-                  />
+                  <div className="relative">
+                    <select
+                      value={region}
+                      onChange={(e) => setRegion(e.target.value)}
+                      className={`${inputClass} appearance-none cursor-pointer`}
+                    >
+                      <option value="" disabled>권역 선택</option>
+                      {["경인", "경기1", "경기2", "경기3", "대구", "부산", "서울", "전라", "충청"].map((r) => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
+                    <ChevronDown
+                      size={16}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                    />
+                  </div>
                 </div>
                 <div className="col-span-2 sm:col-span-1">
                   <label className={labelClass}>지점</label>
